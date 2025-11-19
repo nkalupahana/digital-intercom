@@ -1,3 +1,12 @@
 [submodule "components/arduino-esp32"]
 	path = components/arduino-esp32
 	url = git@github.com:espressif/arduino-esp32.git
+[submodule "components/Adafruit_BusIO"]
+	path = components/Adafruit_BusIO
+	url = git@github.com:adafruit/Adafruit_BusIO.git
+[submodule "components/Adafruit-PN532"]
+	path = components/Adafruit-PN532
+	url = git@github.com:Ace314159/Adafruit-PN532.git
+[submodule "components/tlv.arduino"]
+	path = components/tlv.arduino
+	url = git@github.com:Ace314159/tlv.arduino.git

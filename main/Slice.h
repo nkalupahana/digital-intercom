@@ -1,0 +1,108 @@
+#pragma once
+
+#include "HardwareSerial.h"
+#include <cstdint>
+#include <cstring>
+#include <initializer_list>
+
+// clang-format off
+#define CHECK_AND_RETURN(code) do { if (!code) return false; } while (0)
+// clang-format on
+
+class ReadSlice {
+public:
+  ReadSlice(const uint8_t *data, size_t len);
+
+  size_t len() const;
+
+  uint8_t readByte();
+
+private:
+  const uint8_t *data_;
+  size_t len_;
+};
+
+class WriteSlice {
+public:
+  WriteSlice(uint8_t *data, size_t len);
+
+  size_t len() const;
+  uint8_t *data() const;
+
+  void reset();
+
+  void appendUnsafe(const std::initializer_list<uint8_t> &data);
+
+  void appendUnsafe(const uint8_t *data, size_t len);
+
+  bool fill(uint8_t value, size_t count);
+
+  uint8_t *deferAppend(size_t len);
+
+  bool append(const std::initializer_list<uint8_t> &data);
+
+  bool append(const uint8_t *data, size_t len);
+
+  // le (length expected) is always set to 0
+  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
+                         const std::initializer_list<uint8_t> &data);
+
+  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
+                         const char *cmd);
+  // le (length expected) is always set to 0
+  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
+                         const uint8_t *data, size_t len);
+
+  bool appendDolFromPdol(ReadSlice &pdol);
+
+  // le (length expected) is always set to 0
+  template <typename T>
+  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
+                         T &&appendCommandF) {
+    // CLA + INS + P1 + P2 + Lc + Le
+    size_t minSize = 6;
+    if (len_ < minSize) {
+      Serial.printf("ERROR: Not enough space to write APDU command\n");
+      return false;
+    }
+
+    appendUnsafe({cla, ins, p1, p2});
+    // Reserve space for Lc
+    uint8_t *lcPtr = deferAppend(1);
+    CHECK_AND_RETURN(lcPtr);
+
+    uint8_t *initialData = data_;
+    CHECK_AND_RETURN(appendCommandF(*this));
+    if (data_ - initialData > 0xFF) {
+      Serial.printf("ERROR: APDU command length exceeds 255 bytes\n");
+      return false;
+    }
+    *lcPtr = data_ - initialData;
+    append({0x00}); // Le
+
+    return true;
+  }
+
+  template <typename T> bool appendTLV(uint8_t tag, T &&appendValueF) {
+    CHECK_AND_RETURN(append({tag}));
+
+    // Reserve space for length
+    uint8_t *lengthPtr = deferAppend(1);
+    CHECK_AND_RETURN(lengthPtr);
+
+    uint8_t *initialData = data_;
+    CHECK_AND_RETURN(appendValueF(*this));
+    if (data_ - initialData > 0xFF) {
+      printf("ERROR: TLV length exceeds 255 bytes\n");
+      return false;
+    }
+    *lengthPtr = data_ - initialData;
+
+    return true;
+  }
+
+private:
+  uint8_t *data_;
+  size_t len_;
+  size_t startingLen_;
+};
