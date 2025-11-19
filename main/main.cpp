@@ -1,5 +1,5 @@
-#define MIFAREDEBUG
-#define PN532DEBUG
+// #define MIFAREDEBUG
+// #define PN532DEBUG
 #include "Adafruit_PN532.h"
 
 #include "Slice.h"
