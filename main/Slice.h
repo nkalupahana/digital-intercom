@@ -1,13 +1,11 @@
 #pragma once
 
-#include "HardwareSerial.h"
+#include "errors.h"
+
+#include <HardwareSerial.h>
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
-
-// clang-format off
-#define CHECK_AND_RETURN(code) do { if (!code) return false; } while (0)
-// clang-format on
 
 class ReadSlice {
 public:
@@ -75,10 +73,10 @@ public:
     appendUnsafe({cla, ins, p1, p2});
     // Reserve space for Lc
     uint8_t *lcPtr = deferAppend(1);
-    CHECK_AND_RETURN(lcPtr);
+    CHECK_RETURN_BOOL(lcPtr);
 
     uint8_t *initialData = data_;
-    CHECK_AND_RETURN(appendCommandF(*this));
+    CHECK_RETURN_BOOL(appendCommandF(*this));
     if (data_ - initialData > 0xFF) {
       Serial.printf("ERROR: APDU command length exceeds 255 bytes\n");
       return false;
@@ -90,14 +88,14 @@ public:
   }
 
   template <typename T> bool appendTLV(uint8_t tag, T &&appendValueF) {
-    CHECK_AND_RETURN(append({tag}));
+    CHECK_RETURN_BOOL(append({tag}));
 
     // Reserve space for length
     uint8_t *lengthPtr = deferAppend(1);
-    CHECK_AND_RETURN(lengthPtr);
+    CHECK_RETURN_BOOL(lengthPtr);
 
     uint8_t *initialData = data_;
-    CHECK_AND_RETURN(appendValueF(*this));
+    CHECK_RETURN_BOOL(appendValueF(*this));
     if (data_ - initialData > 0xFF) {
       printf("ERROR: TLV length exceeds 255 bytes\n");
       return false;
