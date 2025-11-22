@@ -8,6 +8,7 @@ ReadSlice::ReadSlice(const uint8_t *data, size_t len)
     : data_(data), len_(len) {}
 
 size_t ReadSlice::len() const { return len_; }
+const uint8_t *ReadSlice::data() const { return data_; }
 
 uint8_t ReadSlice::readByte() {
   if (len_ < 1) {
@@ -21,6 +22,52 @@ uint8_t ReadSlice::readByte() {
   data_++;
   len_--;
   return value;
+}
+
+uint8_t ReadSlice::readByteFromEnd() {
+  if (len_ < 1) {
+    Serial.printf("ERROR: Not enough data to read byte from end\n");
+    // Returning 0 is sus, but this makes the API easier to use, and we'll
+    // see a print showing that something is wrong
+    return 0;
+  }
+
+  len_--;
+  uint8_t value = data_[len_];
+  return value;
+}
+
+bool ReadSlice::windowToPN532Response() {
+  if (len_ < 8) {
+    Serial.printf("ERROR: Not enough data to window to PN532 response\n");
+    return false;
+  }
+  if (readByte() != 0x00 || readByte() != 0x00 || readByte() != 0xFF) {
+    Serial.printf("ERROR: Invalid PN532 preamble or start code\n");
+    return false;
+  }
+  size_t len = readByte();
+  uint8_t lenChecksum = readByte();
+  if ((uint8_t)(len + lenChecksum) != 0x00) {
+    Serial.printf("ERROR: Invalid PN532 length checksum\n");
+    return false;
+  }
+  if (len_ < len + 2) {
+    Serial.printf("ERROR: Not enough data for PN532 response\n");
+    return false;
+  }
+  len_ = len + 2;
+  if (uint8_t tfi = readByte() != 0xD5) {
+    Serial.printf("ERROR: Invalid PN532 TFI %d\n", tfi);
+    return false;
+  }
+  if (uint8_t postamble = readByteFromEnd() != 0) {
+    Serial.printf("ERROR: Invalid PN532 postamble %d\n", postamble);
+    return false;
+  }
+  uint8_t _ = readByteFromEnd(); // checksum
+
+  return true;
 }
 
 WriteSlice::WriteSlice(uint8_t *data, size_t len)
@@ -126,15 +173,15 @@ bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
   return true;
 }
 
-bool WriteSlice::appendDolFromPdol(ReadSlice &pdol) {
-  while (pdol.len() > 0) {
-    uint16_t tag = pdol.readByte();
+bool WriteSlice::appendFromDol(ReadSlice &dol) {
+  while (dol.len() > 0) {
+    uint16_t tag = dol.readByte();
     // This check is AI generated, but it seems correct by emprically checking
     if ((tag & 0x1F) == 0x1F) {
-      tag = (tag << 8) | pdol.readByte();
+      tag = (tag << 8) | dol.readByte();
     }
 
-    uint8_t requiredLen = pdol.readByte();
+    uint8_t requiredLen = dol.readByte();
 
     auto validateAndAppend = [&](std::initializer_list<uint8_t> data) {
       if (data.size() != requiredLen) {

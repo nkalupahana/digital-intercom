@@ -14,8 +14,12 @@ public:
   ReadSlice(const uint8_t *data, size_t len);
 
   size_t len() const;
+  const uint8_t *data() const;
 
   uint8_t readByte();
+  uint8_t readByteFromEnd();
+
+  bool windowToPN532Response();
 
 private:
   const uint8_t *data_;
@@ -53,7 +57,7 @@ public:
   bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
                          const uint8_t *data, size_t len);
 
-  bool appendDolFromPdol(ReadSlice &pdol);
+  bool appendFromDol(ReadSlice &dol);
 
   // le (length expected) is always set to 0
   template <typename T>
