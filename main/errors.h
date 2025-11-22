@@ -7,6 +7,8 @@
     }                                                                          \
   } while (0)
 
+#define CHECK_RETURN(code) CHECK_RETURN_VAL(code, )
+
 #define CHECK_RETURN_BOOL(code) CHECK_RETURN_VAL(code, false)
 
 #define CHECK_PRINT_RETURN_VAL(error_string, code, retVal, ...)                \
