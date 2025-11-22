@@ -24,6 +24,9 @@ byte recordbuf[RECORD_BUFSIZ];
 WriteSlice recordSlice(recordbuf, RECORD_BUFSIZ);
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 
+byte cdolBuf[64];
+WriteSlice cdolSlice(cdolBuf, sizeof(cdolBuf));
+
 TLVS tlvs;
 TLVS cdol_tlvs;
 
@@ -240,7 +243,6 @@ void loop() {
 
     const uint8_t *aflDataPtr = aflData->getValue();
     uint32_t remainingLength = aflData->getValueLength();
-    // TLVNode *fddaData = nullptr;
 
     // Figure out the last sent block number
     writeSlice.reset();
@@ -256,6 +258,7 @@ void loop() {
     uint8_t blockNum = ((response.readByte() & 0xA0) != 0) ? 0x1 : 0x0;
     printf("Last block num: %02x\n", blockNum);
 
+    cdolSlice.reset();
     while (remainingLength > 0) {
       uint8_t recordToRead = aflDataPtr[1];
       uint8_t endRecord = aflDataPtr[2];
@@ -298,14 +301,11 @@ void loop() {
           responseOpt = exchangeDataICT("R(ACK): ", writeSlice, rbuf);
         }
         printHex("Full Read Record response: ", recordbuf, recordSlice.len());
-
-        // if (fddaData == nullptr && responseLength > 0) {
-        //   Serial.println("Looking for fddaData...");
-        //   cdol_tlvs.reset();
-        //   memcpy(cdolbuf, rbuf, responseLength);
-        //   cdol_tlvs.decodeTLVs(cdolbuf, responseLength);
-        //   fddaData = cdol_tlvs.findTLV(0x9F69);
-        // }
+        tlvs.reset();
+        tlvs.decodeTLVs(recordbuf, recordSlice.len());
+        if (TLVNode *cdolNode = tlvs.findTLV(0x8C)) {
+          cdolSlice.append(cdolNode->getValue(), cdolNode->getValueLength());
+        }
 
         recordToRead += 1;
       }
@@ -314,32 +314,26 @@ void loop() {
       aflDataPtr += 4;
     }
 
-    // if (fddaData == nullptr) {
-    //   Serial.println("Failed to find fDDA data (CARD)!");
-    //   return;
-    // }
-
-    // printHex("FDDA data: ", fddaData->getValue(),
-    // fddaData->getValueLength());
-
-    // fDDA
-    // writeSlice.reset();
-    // // writeSlice.append({
-    // //   0x00, 0x88, 0x00, 0x00, 28,
-    // //   0x01, 0x02, 0x03, 0x04, // UN,
-    // //   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // $0.00 authorized
-    // //   0x08, 0x40 // USD
-    // // });
-    // // writeSlice.append(fddaData->getValue(), fddaData->getValueLength());
-    // writeSlice.append({0x00, 0x88, 0x00, 0x00});
-    // writeSlice.append({0x04, 0x01, 0x01, 0x03, 0x04});
-    // writeSlice.append({0x00});
-
-    // responseLength =
-    //     exchangeData("Sending INTERNAL AUTHENTICATE: ", writeSlice, rbuf);
-    // if (responseLength == 0) {
-    //   Serial.println("Failed!");
-    // }
+    if (cdolSlice.len() == 0) {
+      Serial.println("No CDOL data found!");
+      return;
+    }
+    printHex("CDOL data: ", cdolSlice.data(), cdolSlice.len());
+    writeSlice.reset();
+    success = writeSlice.appendApduCommand(
+        0x80, 0xAE, 0x50, 0x00, [](WriteSlice &slice) {
+          ReadSlice cdolReadSlice{cdolSlice.data(), cdolSlice.len()};
+          return slice.appendFromDol(cdolReadSlice);
+        });
+    if (!success) {
+      Serial.println("Failed to build GENERATE AC command");
+      return;
+    }
+    responseLength = exchangeData("Sending GENERATE AC: ", writeSlice, rbuf);
+    if (responseLength == 0) {
+      Serial.println("Failed!");
+      return;
+    }
   } else {
     // ECP
     writeSlice.reset();
