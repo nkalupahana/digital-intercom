@@ -11,6 +11,8 @@
 
 #define CHECK_RETURN_BOOL(code) CHECK_RETURN_VAL(code, false)
 
+#define CHECK_RETURN_OPT(code) CHECK_RETURN_VAL(code, std::nullopt)
+
 #define CHECK_PRINT_RETURN_VAL(error_string, code, retVal, ...)                \
   do {                                                                         \
     if (!(code)) {                                                             \
