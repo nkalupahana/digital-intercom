@@ -3,13 +3,14 @@
 #include <HardwareSerial.h>
 #include <cstdint>
 #include <cstring>
-#include <initializer_list>
+#include <string_view>
 
 ReadSlice::ReadSlice(const uint8_t *data, size_t len)
     : data_(data), len_(len) {}
 
 size_t ReadSlice::len() const { return len_; }
 const uint8_t *ReadSlice::data() const { return data_; }
+std::span<const uint8_t> ReadSlice::span() const { return {data(), len()}; }
 
 uint8_t ReadSlice::readByte() {
   // Returning 0 is sus, but this makes the API easier to use, and we'll
@@ -67,15 +68,9 @@ void WriteSlice::reset() {
   len_ = startingLen_;
 }
 
-void WriteSlice::appendUnsafe(const std::initializer_list<uint8_t> &data) {
-  size_t dataLen = data.size();
-  memcpy(data_, data.begin(), dataLen);
-  data_ += dataLen;
-  len_ -= dataLen;
-}
-
-void WriteSlice::appendUnsafe(const uint8_t *data, size_t len) {
-  memcpy(data_, data, len);
+void WriteSlice::appendUnsafe(const std::span<const uint8_t> data) {
+  size_t len = data.size();
+  memcpy(data_, data.data(), len);
   data_ += len;
   len_ -= len;
 }
@@ -100,7 +95,7 @@ uint8_t *WriteSlice::deferAppend(size_t len) {
   return ptr;
 }
 
-bool WriteSlice::append(const std::initializer_list<uint8_t> &data) {
+bool WriteSlice::append(const std::span<const uint8_t> data) {
   CHECK_PRINT_RETURN_BOOL(
       "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu",
       len_ >= data.size(), len_, data.size());
@@ -109,30 +104,10 @@ bool WriteSlice::append(const std::initializer_list<uint8_t> &data) {
   return true;
 }
 
-bool WriteSlice::append(const uint8_t *data, size_t len) {
-  CHECK_PRINT_RETURN_BOOL(
-      "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu",
-      len_ >= len, len_, len);
-
-  appendUnsafe(data, len);
-  return true;
-}
-
 bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
                                    uint8_t p2,
-                                   const std::initializer_list<uint8_t> &data) {
-  return appendApduCommand(cla, ins, p1, p2, data.begin(), data.size());
-}
-
-bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
-                                   uint8_t p2, const char *cmd) {
-  return appendApduCommand(cla, ins, p1, p2,
-                           reinterpret_cast<const uint8_t *>(cmd), strlen(cmd));
-}
-
-bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
-                                   uint8_t p2, const uint8_t *data,
-                                   size_t len) {
+                                   const std::span<const uint8_t> data) {
+  size_t len = data.size();
   // CLA + INS + P1 + P2 + Lc + Data + Le
   size_t numToWrite = 5 + len + 1;
   CHECK_PRINT_RETURN_BOOL(
@@ -140,11 +115,18 @@ bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
       "commandLen: %zu",
       len <= 0xFF && len_ >= numToWrite, len_, numToWrite);
 
-  appendUnsafe({cla, ins, p1, p2, (uint8_t)len});
-  appendUnsafe(data, len);
-  appendUnsafe({0x00}); // Le
+  appendUnsafe({{cla, ins, p1, p2, (uint8_t)len}});
+  appendUnsafe(data);
+  appendUnsafe({{0x00}}); // Le
 
   return true;
+}
+
+bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
+                                   uint8_t p2, std::string_view cmd) {
+  std::span<const uint8_t> byteCommand{
+      reinterpret_cast<const uint8_t *>(cmd.data()), cmd.size()};
+  return appendApduCommand(cla, ins, p1, p2, byteCommand);
 }
 
 bool WriteSlice::appendFromDol(ReadSlice &dol) {

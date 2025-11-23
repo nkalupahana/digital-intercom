@@ -5,8 +5,8 @@
 #include <HardwareSerial.h>
 #include <cstdint>
 #include <cstring>
-#include <initializer_list>
 #include <span>
+#include <string_view>
 
 class ReadSlice {
 public:
@@ -14,6 +14,7 @@ public:
 
   size_t len() const;
   const uint8_t *data() const;
+  std::span<const uint8_t> span() const;
 
   uint8_t readByte();
   uint8_t readByteFromEnd();
@@ -35,27 +36,21 @@ public:
 
   void reset();
 
-  void appendUnsafe(const std::initializer_list<uint8_t> &data);
-
-  void appendUnsafe(const uint8_t *data, size_t len);
+  void appendUnsafe(const std::span<const uint8_t> data);
 
   bool fill(uint8_t value, size_t count);
 
   uint8_t *deferAppend(size_t len);
 
-  bool append(const std::initializer_list<uint8_t> &data);
-
-  bool append(const uint8_t *data, size_t len);
+  bool append(const std::span<const uint8_t> data);
 
   // le (length expected) is always set to 0
   bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
-                         const std::initializer_list<uint8_t> &data);
+                         const std::span<const uint8_t> data);
 
-  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
-                         const char *cmd);
   // le (length expected) is always set to 0
   bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
-                         const uint8_t *data, size_t len);
+                         std::string_view cmd);
 
   bool appendFromDol(ReadSlice &dol);
 
@@ -72,7 +67,7 @@ public:
       return false;
     }
 
-    appendUnsafe({cla, ins, p1, p2});
+    appendUnsafe({{cla, ins, p1, p2}});
     // Reserve space for Lc
     uint8_t *lcPtr = deferAppend(1);
     CHECK_RETURN_BOOL(lcPtr);
@@ -84,13 +79,13 @@ public:
       return false;
     }
     *lcPtr = data_ - initialData;
-    append({0x00}); // Le
+    append({{0x00}}); // Le
 
     return true;
   }
 
   template <typename T> bool appendTLV(uint8_t tag, T &&appendValueF) {
-    CHECK_RETURN_BOOL(append({tag}));
+    CHECK_RETURN_BOOL(append({{tag}}));
 
     // Reserve space for length
     uint8_t *lengthPtr = deferAppend(1);

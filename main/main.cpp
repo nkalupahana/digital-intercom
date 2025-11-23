@@ -6,6 +6,7 @@
 #include <Adafruit_PN532.h>
 #include <tlv.h>
 
+#include <cstdint>
 #include <optional>
 #include <span>
 
@@ -64,26 +65,25 @@ void setup() {
 void printHex(const char *pre, std::span<const uint8_t> data) {
   Serial.print(pre);
   for (const uint8_t byte : data) {
-    Serial.print(byte, HEX);
+    Serial.printf("%02X", byte);
   }
   Serial.println();
 }
 
 std::optional<ReadSlice> exchangeData(const char *pre,
                                       std::span<const uint8_t> toSend,
-                                      std::span<uint8_t> receiveSpan) {
+                                      std::span<uint8_t> recvBuf) {
   printHex(pre, toSend);
 
-  uint8_t responseLength = receiveSpan.size();
+  uint8_t recvLen = recvBuf.size();
   bool success = nfc.inDataExchange(toSend.data(), toSend.size(),
-                                    receiveSpan.data(), &responseLength);
+                                    recvBuf.data(), &recvLen);
   CHECK_PRINT_RETURN_OPT("Failed to get response for InDataExchange", success);
 
-  std::span<const uint8_t> actualReceiveSpan =
-      receiveSpan.subspan(0, responseLength);
-  printHex("Received data: ", actualReceiveSpan);
+  std::span<const uint8_t> recvSpan = recvBuf.subspan(0, recvLen);
+  printHex("Received data: ", recvSpan);
 
-  ReadSlice readSlice(actualReceiveSpan.data(), actualReceiveSpan.size());
+  ReadSlice readSlice(recvSpan.data(), recvSpan.size());
   uint8_t sw2 = readSlice.readByteFromEnd();
   uint8_t sw1 = readSlice.readByteFromEnd();
   uint16_t sw = (sw1 << 8) | sw2;
@@ -94,24 +94,24 @@ std::optional<ReadSlice> exchangeData(const char *pre,
 
 std::optional<ReadSlice> exchangeDataICT(const char *pre,
                                          std::span<const uint8_t> toSend,
-                                         std::span<uint8_t> receiveSpan) {
+                                         std::span<uint8_t> recvBuf) {
   printHex(pre, toSend);
 
-  static byte buf[PN532_PACKBUFFSIZ];
+  static byte sendBuf[PN532_PACKBUFFSIZ];
   size_t requiredLen = toSend.size() + 1;
   CHECK_PRINT_RETURN_OPT(
       "exchangeDataICT buffer too small - bufLen: %zu, requiredLen: %zu",
       requiredLen < PN532_PACKBUFFSIZ, PN532_PACKBUFFSIZ, requiredLen);
-  buf[0] = PN532_COMMAND_INCOMMUNICATETHRU;
-  memcpy(&buf[1], toSend.data(), toSend.size());
+  sendBuf[0] = PN532_COMMAND_INCOMMUNICATETHRU;
+  memcpy(&sendBuf[1], toSend.data(), toSend.size());
 
-  std::span<const uint8_t> bufSpan{buf, requiredLen};
+  std::span<const uint8_t> sendBufSpan{sendBuf, requiredLen};
   CHECK_PRINT_RETURN_OPT("Failed to send exchangeDataICT Command!",
-                         sendCommand(bufSpan));
+                         sendCommand(sendBufSpan));
 
-  nfc.readdata(receiveSpan.data(), receiveSpan.size());
+  nfc.readdata(recvBuf.data(), recvBuf.size());
 
-  ReadSlice readSlice(receiveSpan.data(), receiveSpan.size());
+  ReadSlice readSlice(recvBuf.data(), recvBuf.size());
   CHECK_PRINT_RETURN_OPT("Failed to window to PN532 response",
                          readSlice.windowToPN532Response());
 
@@ -141,7 +141,6 @@ void loop() {
     writeSlice.reset();
     CHECK_RETURN(
         writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, "2PAY.SYS.DDF01"));
-
     readSliceOpt =
         exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
     CHECK_RETURN(readSliceOpt.has_value());
@@ -150,17 +149,13 @@ void loop() {
     // SELECT AID
     tlvs.decodeTLVs(rbuf, readSlice.len());
     TLVNode *aidNode = tlvs.findTLV(0x4F);
-    if (aidNode == nullptr) {
-      Serial.println("Failed to get AID from card!");
-      return;
-    }
-    const uint8_t *aid = aidNode->getValue();
-    size_t aidLen = aidNode->getValueLength();
+    CHECK_PRINT_RETURN("Failed to get AID from card!", aidNode);
+    std::span<const uint8_t> aid{aidNode->getValue(),
+                                 aidNode->getValueLength()};
     tlvs.reset();
 
     writeSlice.reset();
-    CHECK_RETURN(
-        writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, aid, aidLen));
+    CHECK_RETURN(writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, aid));
     readSliceOpt =
         exchangeData("Sending SELECT AID: ", writeSlice.span(), rbuf);
     CHECK_RETURN(readSliceOpt.has_value());
@@ -175,7 +170,7 @@ void loop() {
       tlvs.reset();
       Serial.println("Failed to find PDOL. Using empty DOL");
       CHECK_RETURN(
-          writeSlice.appendApduCommand(0x80, 0xA8, 0x00, 0x00, {0x83, 0x00}));
+          writeSlice.appendApduCommand(0x80, 0xA8, 0x00, 0x00, {{0x83, 0x00}}));
     } else {
       ReadSlice pdol{pdolNode->getValue(), pdolNode->getValueLength()};
       tlvs.reset();
@@ -216,8 +211,8 @@ void loop() {
     // Figure out the last sent block number
     readSliceOpt = exchangeDataICT("R(NACK): ", {{0xB2}}, rbuf);
     CHECK_RETURN(readSliceOpt.has_value());
-    uint8_t blockNum =
-        ((readSliceOpt.value().readByte() & 0xA0) != 0) ? 0x1 : 0x0;
+    readSlice = readSliceOpt.value();
+    uint8_t blockNum = ((readSlice.readByte() & 0xA0) != 0) ? 0x1 : 0x0;
 
     static byte cdolBuf[CDOL_BUFSIZ];
     static WriteSlice cdolSlice(cdolBuf, sizeof(cdolBuf));
@@ -237,7 +232,6 @@ void loop() {
         blockNum ^= 1;
         uint8_t pcb = 0x2 | blockNum;
         uint8_t p2 = (sfi & 0xF8) | 0x4;
-        // TODO: add appendApduCommand that takes no data
         readSliceOpt = exchangeDataICT(
             "Read Record: ", {{pcb, 0x00, 0xB2, recordToRead, p2, 0x00}}, rbuf);
         while (true) {
@@ -245,9 +239,8 @@ void loop() {
           readSlice = readSliceOpt.value();
 
           uint8_t responsePcb = readSlice.readByte();
-          CHECK_PRINT_RETURN(
-              "Failed to buffer record data",
-              recordSlice.append(readSlice.data(), readSlice.len()));
+          CHECK_PRINT_RETURN("Failed to buffer record data",
+                             recordSlice.append(readSlice.span()));
 
           // If no more data, break
           if ((responsePcb & 0x10) == 0) {
@@ -264,13 +257,12 @@ void loop() {
         tlvs.decodeTLVs(recordbuf, recordSlice.len());
         if (TLVNode *cdolNode = tlvs.findTLV(0x8C)) {
           CHECK_PRINT_RETURN("Found duplicate CDOL tags", cdolSlice.len() == 0);
-          cdolSlice.append(cdolNode->getValue(), cdolNode->getValueLength());
+          cdolSlice.append({cdolNode->getValue(), cdolNode->getValueLength()});
         }
       }
     }
 
     CHECK_PRINT_RETURN("No CDOL found", cdolSlice.len());
-
     printHex("CDOL data: ", cdolSlice.span());
     writeSlice.reset();
     bool builtAC = writeSlice.appendApduCommand(
