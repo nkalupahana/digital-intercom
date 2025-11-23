@@ -15,6 +15,7 @@
   do {                                                                         \
     if (!(code)) {                                                             \
       Serial.printf(error_string __VA_OPT__(, ) __VA_ARGS__);                  \
+      Serial.println();                                                        \
       return retVal;                                                           \
     }                                                                          \
   } while (0)
@@ -22,5 +23,8 @@
 #define CHECK_PRINT_RETURN_BOOL(error_string, code, ...)                       \
   CHECK_PRINT_RETURN_VAL(error_string, code, false, __VA_ARGS__)
 
+#define CHECK_PRINT_RETURN_OPT(error_string, code, ...)                        \
+  CHECK_PRINT_RETURN_VAL(error_string, code, std::nullopt, __VA_ARGS__)
+
 #define CHECK_PRINT_RETURN(error_string, code, ...)                            \
-  CHECK_PRINT_RETURN_VAL(error_string, code, __VA_ARGS__)
+  CHECK_PRINT_RETURN_VAL(error_string, code, , __VA_ARGS__)

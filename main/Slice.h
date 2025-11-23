@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
+#include <span>
 
 class ReadSlice {
 public:
@@ -30,6 +31,7 @@ public:
 
   size_t len() const;
   uint8_t *data() const;
+  std::span<const uint8_t> span() const;
 
   void reset();
 

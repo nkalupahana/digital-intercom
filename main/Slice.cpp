@@ -14,8 +14,7 @@ const uint8_t *ReadSlice::data() const { return data_; }
 uint8_t ReadSlice::readByte() {
   // Returning 0 is sus, but this makes the API easier to use, and we'll
   // see a print showing that something is wrong
-  CHECK_PRINT_RETURN_VAL("ERROR: Not enough data to ready byte\n", len_ >= 1,
-                         0);
+  CHECK_PRINT_RETURN_VAL("ERROR: Not enough data to ready byte", len_ >= 1, 0);
 
   uint8_t value = *data_;
   data_++;
@@ -26,7 +25,7 @@ uint8_t ReadSlice::readByte() {
 uint8_t ReadSlice::readByteFromEnd() {
   // Returning 0 is sus, but this makes the API easier to use, and we'll
   // see a print showing that something is wrong
-  CHECK_PRINT_RETURN_VAL("ERROR: Not enough data to read byte from end\n",
+  CHECK_PRINT_RETURN_VAL("ERROR: Not enough data to read byte from end",
                          len_ >= 1, 0);
   len_--;
   uint8_t value = data_[len_];
@@ -35,17 +34,17 @@ uint8_t ReadSlice::readByteFromEnd() {
 
 bool ReadSlice::windowToPN532Response() {
 
-  CHECK_PRINT_RETURN_BOOL(
-      "ERROR: Not enough data to window to PN532 response\n", len_ >= 8);
+  CHECK_PRINT_RETURN_BOOL("ERROR: Not enough data to window to PN532 response",
+                          len_ >= 8);
   CHECK_PRINT_RETURN_BOOL("ERROR: Invalid PN532 preamble or start code",
                           readByte() == 0x00 && readByte() == 0x00 &&
                               readByte() == 0xFF);
 
   size_t len = readByte();
   uint8_t lenChecksum = readByte();
-  CHECK_PRINT_RETURN_BOOL("ERROR: Invalid PN532 length\n",
+  CHECK_PRINT_RETURN_BOOL("ERROR: Invalid PN532 length",
                           (uint8_t)(len + lenChecksum) == 0x00);
-  CHECK_PRINT_RETURN_BOOL("ERROR: Not enough data for PN532 response\n",
+  CHECK_PRINT_RETURN_BOOL("ERROR: Not enough data for PN532 response",
                           len_ >= len + 2);
   len_ = len + 2;
   CHECK_PRINT_RETURN_BOOL("ERROR: Invalid PN532 TFI", readByte() == 0xD5);
@@ -61,6 +60,7 @@ WriteSlice::WriteSlice(uint8_t *data, size_t len)
 
 size_t WriteSlice::len() const { return startingLen_ - len_; }
 uint8_t *WriteSlice::data() const { return data_ - len(); }
+std::span<const uint8_t> WriteSlice::span() const { return {data(), len()}; }
 
 void WriteSlice::reset() {
   data_ = data_ - len();
@@ -81,7 +81,7 @@ void WriteSlice::appendUnsafe(const uint8_t *data, size_t len) {
 }
 
 bool WriteSlice::fill(uint8_t value, size_t count) {
-  CHECK_PRINT_RETURN_BOOL("ERROR: Not enough space to fill data\n",
+  CHECK_PRINT_RETURN_BOOL("ERROR: Not enough space to fill data",
                           len_ >= count);
 
   memset(data_, value, count);
@@ -91,8 +91,8 @@ bool WriteSlice::fill(uint8_t value, size_t count) {
 }
 
 uint8_t *WriteSlice::deferAppend(size_t len) {
-  CHECK_PRINT_RETURN_VAL("ERROR: Not enough space to defer append\n",
-                         len_ >= len, nullptr);
+  CHECK_PRINT_RETURN_VAL("ERROR: Not enough space to defer append", len_ >= len,
+                         nullptr);
 
   uint8_t *ptr = data_;
   data_ += len;
@@ -102,7 +102,7 @@ uint8_t *WriteSlice::deferAppend(size_t len) {
 
 bool WriteSlice::append(const std::initializer_list<uint8_t> &data) {
   CHECK_PRINT_RETURN_BOOL(
-      "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu\n",
+      "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu",
       len_ >= data.size(), len_, data.size());
 
   appendUnsafe(data);
@@ -111,7 +111,7 @@ bool WriteSlice::append(const std::initializer_list<uint8_t> &data) {
 
 bool WriteSlice::append(const uint8_t *data, size_t len) {
   CHECK_PRINT_RETURN_BOOL(
-      "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu\n",
+      "ERROR: Not enough space to append data - bufferLen: %zu, dataLen: %zu",
       len_ >= len, len_, len);
 
   appendUnsafe(data, len);
@@ -137,7 +137,7 @@ bool WriteSlice::appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1,
   size_t numToWrite = 5 + len + 1;
   CHECK_PRINT_RETURN_BOOL(
       "ERROR: Not enough space to write APDU command - bufferLen: %zu, "
-      "commandLen: %zu\n",
+      "commandLen: %zu",
       len <= 0xFF && len_ >= numToWrite, len_, numToWrite);
 
   appendUnsafe({cla, ins, p1, p2, (uint8_t)len});
@@ -159,7 +159,7 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
 
     auto validateAndAppend = [&](std::initializer_list<uint8_t> data) {
       CHECK_PRINT_RETURN_BOOL("ERROR: DOL length mismatch - tag: %04X - "
-                              "requiredLen: %u - dataLen: %zu\n",
+                              "requiredLen: %u - dataLen: %zu",
                               data.size() == requiredLen, tag, requiredLen,
                               data.size());
 
