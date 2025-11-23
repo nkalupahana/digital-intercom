@@ -3,6 +3,7 @@
 #include "errors.h"
 
 #include <HardwareSerial.h>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <span>
@@ -56,10 +57,10 @@ public:
 
   // le (length expected) is always set to 0
 
-  // TODO: Avoid using std::function
-  bool
-  appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
-                    const std::function<bool(WriteSlice &)> &appendCommandF) {
+  template <typename T>
+    requires(std::predicate<T, WriteSlice &>)
+  bool appendApduCommand(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2,
+                         T &&appendCommandF) {
     // CLA + INS + P1 + P2 + Lc + Le
     size_t minSize = 6;
     if (len_ < minSize) {
