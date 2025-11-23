@@ -187,12 +187,14 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     CHECK_RETURN_OPT(readSliceOpt);
     readSlice = *readSliceOpt;
 
-    // Get Track 2 data
+    // Try to get Track 2 data it it's already available
+    static byte track2Buf[TRACK2_TAG_BUFSIZ];
+    WriteSlice track2Slice{track2Buf, sizeof(track2Buf)};
     tlvs.decodeTLVs(readSlice.data(), readSlice.len());
-    TLVNode *cardData = tlvs.findTLV(TRACK2_TAG);
-    if (cardData) {
-      return std::span<const uint8_t>{cardData->getValue(),
-                                      cardData->getValueLength()};
+    TLVNode *track2Node = tlvs.findTLV(TRACK2_TAG);
+    if (track2Node) {
+      track2Slice.append(
+          {track2Node->getValue(), track2Node->getValueLength()});
     }
 
     // Read records
@@ -216,9 +218,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     static byte cdolBuf[CDOL_BUFSIZ];
     static WriteSlice cdolSlice(cdolBuf, sizeof(cdolBuf));
     cdolSlice.reset();
-    static byte track2Buf[TRACK2_TAG_BUFSIZ];
-    WriteSlice track2Slice(track2Buf, sizeof(track2Buf));
-    track2Slice.reset();
+
     while (aflSlice.len() > 0) {
       uint8_t sfi = aflSlice.readByte();
       uint8_t recordToRead = aflSlice.readByte();
@@ -272,7 +272,15 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
       }
     }
 
-    CHECK_PRINT_RETURN_OPT("No CDOL found", cdolSlice.len());
+    if (cdolSlice.len() == 0) {
+      // If there's no CDOL, then there's nothing else we can do, and we have to
+      // just return whatever track 2 data we've found
+      CHECK_PRINT_RETURN_OPT("No CDOL or Track 2 Equivalent Data found",
+                             track2Slice.len());
+      return track2Slice.span();
+    }
+    CHECK_PRINT_RETURN_VAL("No CDOL found", cdolSlice.len(),
+                           track2Slice.span());
     printHex("CDOL data: ", cdolSlice.span());
     writeSlice.reset();
     bool builtAC = writeSlice.appendApduCommand(
@@ -289,7 +297,6 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     CHECK_PRINT_RETURN_OPT(
         "No Track 2 Equivalent Data found after reading records",
         track2Slice.len());
-
     return track2Slice.span();
   } else {
     // Set CIU_BitFraming register to send 8 bits
