@@ -6,7 +6,6 @@
 #include <Adafruit_PN532.h>
 #include <tlv.h>
 
-#include <initializer_list>
 #include <optional>
 #include <span>
 
@@ -34,8 +33,13 @@ void setup() {
   Serial.begin(115200);
 
   Serial.println("HELLO! version 2");
-  nfc.begin();
-
+  bool success = nfc.begin();
+  if (!success) {
+    Serial.println("Couldn't begin PN53x board");
+    // halt
+    while (1)
+      ;
+  }
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (!versiondata) {
     Serial.println("Didn't find PN53x board");
