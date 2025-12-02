@@ -139,14 +139,50 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     static byte rbuf[PN532_PACKBUFFSIZ];
     WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 
-    // SELECT PPSE
+    // SELECT NDEF application
     writeSlice.reset();
     CHECK_RETURN_OPT(
-        writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, "2PAY.SYS.DDF01"));
+        writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, {{0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01}}));
     readSliceOpt =
         exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
     CHECK_RETURN_OPT(readSliceOpt);
     readSlice = *readSliceOpt;
+
+    // SELECT CC
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.appendApduCommand(0x00, 0xA4, 0x00, 0x0C, {{0xE1, 0x03}}));
+    readSliceOpt =
+        exchangeData("Sending SELECT CC File: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
+
+    // READ CC data (read 15 bytes of data)
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x0F}}));
+    readSliceOpt =
+        exchangeData("Reading CC data: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
+
+    // TODO: Parse CC data to get the file ID (nearly always 0xE104)
+
+    // NDEF Select file
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.appendApduCommand(0x00, 0xA4, 0x00, 0x0C, {{0xE1, 0x04}}));
+    readSliceOpt =
+        exchangeData("Sending NDEF Select File: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
+
+    // Read binary
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x1F}}));
+    readSliceOpt =
+        exchangeData("Sending Read binary: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
+
+    return std::nullopt;
 
     // SELECT AID
     tlvs.decodeTLVs(rbuf, readSlice.len());
@@ -299,19 +335,19 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
         track2Slice.len());
     return track2Slice.span();
   } else {
-    // Set CIU_BitFraming register to send 8 bits
-    uint16_t addr = 0x633D;
-    CHECK_PRINT_RETURN_OPT(
-        "Failed to set CIU_BitFraming for ECP",
-        sendCommand({{PN532_COMMAND_WRITEREGISTER, (uint8_t)(addr >> 8),
-                      (uint8_t)(addr & 0xFF), 0x00}}));
+    // // Set CIU_BitFraming register to send 8 bits
+    // uint16_t addr = 0x633D;
+    // CHECK_PRINT_RETURN_OPT(
+    //     "Failed to set CIU_BitFraming for ECP",
+    //     sendCommand({{PN532_COMMAND_WRITEREGISTER, (uint8_t)(addr >> 8),
+    //                   (uint8_t)(addr & 0xFF), 0x00}}));
 
-    // Send the ECP frame
-    CHECK_PRINT_RETURN_OPT(
-        "Failed to send ECP frame",
-        sendCommand(
-            {{PN532_COMMAND_INCOMMUNICATETHRU, 0x6a, 0x02, 0xc8, 0x01, 0x00,
-              0x03, 0x00, 0x06, 0x7f, 0x01, 0x00, 0x00, 0x00, 0x4d, 0xef}}));
+    // // Send the ECP frame
+    // CHECK_PRINT_RETURN_OPT(
+    //     "Failed to send ECP frame",
+    //     sendCommand(
+    //         {{PN532_COMMAND_INCOMMUNICATETHRU, 0x6a, 0x02, 0xc8, 0x01, 0x00,
+    //           0x03, 0x00, 0x06, 0x7f, 0x01, 0x00, 0x00, 0x00, 0x4d, 0xef}}));
   }
 
   return std::nullopt;
