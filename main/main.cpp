@@ -1,19 +1,18 @@
 // #define MIFAREDEBUG
 // #define PN532DEBUG
+#include "SPI.h"
 #include "Slice.h"
 #include "errors.h"
 
-#include <Adafruit_PN532.h>
+#include <PN532_SPI.h>
+#include <PN532.h>
 #include <tlv.h>
 
 #include <cstdint>
 #include <optional>
 #include <span>
 
-constexpr size_t PN532_SCK = 18;
-constexpr size_t PN532_MOSI = 23;
 constexpr size_t PN532_SS = 5;
-constexpr size_t PN532_MISO = 19;
 
 constexpr size_t PN532_PACKBUFFSIZ = 255;
 constexpr size_t RECORD_BUFSIZ = 300;
@@ -22,33 +21,20 @@ constexpr size_t AFL_BUFSIZE = 16;
 constexpr size_t TRACK2_TAG = 0x57;
 constexpr size_t TRACK2_TAG_BUFSIZ = 19;
 
-Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
-
-bool sendCommand(std::span<const uint8_t> cmd) {
-  CHECK_PRINT_RETURN_BOOL("Failed to send command",
-                          nfc.sendCommandCheckAck(cmd.data(), cmd.size()));
-  CHECK_PRINT_RETURN_BOOL("Response, never received for command",
-                          nfc.waitready(1000));
-  return true;
-}
+PN532_SPI pn532spi(SPI, PN532_SS);
+PN532 nfc(pn532spi);
 
 void setup() {
   Serial.begin(115200);
 
-  Serial.println("HELLO! version 2");
-  bool success = nfc.begin();
-  if (!success) {
-    Serial.println("Couldn't begin PN53x board");
-    // halt
-    while (1)
-      ;
-  }
-  uint32_t versiondata = nfc.getFirmwareVersion();
-  if (!versiondata) {
-    Serial.println("Didn't find PN53x board");
-    // halt
-    while (1)
-      ;
+  Serial.println("HELLO!");
+  nfc.begin();
+
+  uint32_t versiondata = 0;
+  while (!versiondata) {
+    Serial.println("Waiting for PN532 to initialize...");
+    versiondata = nfc.getFirmwareVersion();
+    delay(1000);
   }
 
   // Got ok data, print it out!
@@ -59,9 +45,13 @@ void setup() {
   Serial.print('.');
   Serial.println((versiondata >> 8) & 0xFF, DEC);
 
-  CHECK_PRINT_RETURN(
-      "Failed to configure RF",
-      sendCommand({{PN532_COMMAND_RFCONFIGURATION, 0x05, 0xFF, 0x01, 0x00}}));
+  if (!nfc.SAMConfig()) {
+    Serial.println("Failed to configure SAM!");
+  }
+
+  if (!nfc.setPassiveActivationRetries(0x00)) {
+    Serial.println("Failed to configure retries!");
+  }
 }
 
 void printHex(const char *pre, std::span<const uint8_t> data) {
@@ -99,44 +89,29 @@ std::optional<ReadSlice> exchangeDataICT(const char *pre,
                                          std::span<uint8_t> recvBuf) {
   printHex(pre, toSend);
 
-  static byte sendBuf[PN532_PACKBUFFSIZ];
-  size_t requiredLen = toSend.size() + 1;
-  CHECK_PRINT_RETURN_OPT(
-      "exchangeDataICT buffer too small - bufLen: %zu, requiredLen: %zu",
-      requiredLen < PN532_PACKBUFFSIZ, PN532_PACKBUFFSIZ, requiredLen);
-  sendBuf[0] = PN532_COMMAND_INCOMMUNICATETHRU;
-  memcpy(&sendBuf[1], toSend.data(), toSend.size());
+  uint8_t recvLen = recvBuf.size();
+  CHECK_PRINT_RETURN_OPT("Failed to inCommunicateThru", nfc.inCommunicateThru(toSend.data(), toSend.size(), recvBuf.data(), &recvLen));
 
-  std::span<const uint8_t> sendBufSpan{sendBuf, requiredLen};
-  CHECK_PRINT_RETURN_OPT("Failed to send exchangeDataICT Command!",
-                         sendCommand(sendBufSpan));
-
-  nfc.readdata(recvBuf.data(), recvBuf.size());
-
-  ReadSlice readSlice(recvBuf.data(), recvBuf.size());
-  CHECK_PRINT_RETURN_OPT("Failed to window to PN532 response",
-                         readSlice.windowToPN532Response());
-
-  uint8_t cmd = readSlice.readByte();
-  CHECK_PRINT_RETURN_OPT("ERROR: Expected INCOMMUNICATETHRU response, got %02X",
-                         cmd == PN532_COMMAND_INCOMMUNICATETHRU + 1, cmd);
-  uint8_t status = readSlice.readByte();
-  CHECK_PRINT_RETURN_OPT("ERROR: Invalid status from INCOMMUNICATETHRU: %02X",
-                         status == 0x00, status);
-
+  ReadSlice readSlice(recvBuf.data(), recvLen);
   return readSlice;
+}
+
+bool exchangeDataICT(std::span<const uint8_t> toSend) {
+  CHECK_PRINT_RETURN_BOOL("Failed to inCommunicateThru", nfc.inCommunicateThru(toSend.data(), toSend.size()));
+
+  return false;
 }
 
 std::optional<std::span<const uint8_t>> getTrack2Data() {
   bool foundCard = nfc.inListPassiveTarget();
-
+  
   if (foundCard) {
     Serial.println("\nFound something!");
     std::optional<ReadSlice> readSliceOpt;
     ReadSlice readSlice{nullptr, 0};
     static TLVS tlvs;
-    static byte sbuf[PN532_PACKBUFFSIZ];
-    static byte rbuf[PN532_PACKBUFFSIZ];
+    static uint8_t rbuf[PN532_PACKBUFFSIZ];
+    static uint8_t sbuf[PN532_PACKBUFFSIZ];
     WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 
     // SELECT PPSE
@@ -188,7 +163,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     readSlice = *readSliceOpt;
 
     // Try to get Track 2 data it it's already available
-    static byte track2Buf[TRACK2_TAG_BUFSIZ];
+    static uint8_t track2Buf[TRACK2_TAG_BUFSIZ];
     WriteSlice track2Slice{track2Buf, sizeof(track2Buf)};
     tlvs.decodeTLVs(readSlice.data(), readSlice.len());
     TLVNode *track2Node = tlvs.findTLV(TRACK2_TAG);
@@ -200,7 +175,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     // Read records
     TLVNode *aflNode = tlvs.findTLV(0x94);
     CHECK_PRINT_RETURN_OPT("No AFL data found", aflNode);
-    static byte aflBuf[AFL_BUFSIZE];
+    static uint8_t aflBuf[AFL_BUFSIZE];
     size_t aflLen = aflNode->getValueLength();
     CHECK_PRINT_RETURN_OPT(
         "aflBuf is not large enough - bufLen: %zu - requiredlen: %zu",
@@ -214,8 +189,9 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     CHECK_RETURN_OPT(readSliceOpt);
     readSlice = *readSliceOpt;
     uint8_t blockNum = ((readSlice.readByte() & 0xA0) != 0) ? 0x1 : 0x0;
+    Serial.printf("blockNum: %02x\n", blockNum);
 
-    static byte cdolBuf[CDOL_BUFSIZ];
+    static uint8_t cdolBuf[CDOL_BUFSIZ];
     static WriteSlice cdolSlice(cdolBuf, sizeof(cdolBuf));
     cdolSlice.reset();
 
@@ -227,7 +203,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
       uint8_t _ = aflSlice.readByte();
       for (; recordToRead <= endRecord; ++recordToRead) {
         Serial.printf("Reading record %02x\n", recordToRead);
-        static byte recordbuf[RECORD_BUFSIZ];
+        static uint8_t recordbuf[RECORD_BUFSIZ];
         WriteSlice recordSlice(recordbuf, RECORD_BUFSIZ);
 
         writeSlice.reset();
@@ -303,15 +279,10 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     uint16_t addr = 0x633D;
     CHECK_PRINT_RETURN_OPT(
         "Failed to set CIU_BitFraming for ECP",
-        sendCommand({{PN532_COMMAND_WRITEREGISTER, (uint8_t)(addr >> 8),
-                      (uint8_t)(addr & 0xFF), 0x00}}));
+        nfc.writeRegister(addr, 0x00));
 
     // Send the ECP frame
-    CHECK_PRINT_RETURN_OPT(
-        "Failed to send ECP frame",
-        sendCommand(
-            {{PN532_COMMAND_INCOMMUNICATETHRU, 0x6a, 0x02, 0xc8, 0x01, 0x00,
-              0x03, 0x00, 0x06, 0x7f, 0x01, 0x00, 0x00, 0x00, 0x4d, 0xef}}));
+    exchangeDataICT({{0x6a, 0x02, 0xc8, 0x01, 0x00, 0x03, 0x00, 0x06, 0x7f, 0x01, 0x00, 0x00, 0x00, 0x4d, 0xef}});
   }
 
   return std::nullopt;
@@ -322,4 +293,5 @@ void loop() {
   CHECK_RETURN(track2DataOpt);
   const std::span<const uint8_t> track2Data = *track2DataOpt;
   printHex("Track 2 Equivalent Data: ", track2Data);
+  delay(3000);
 }
