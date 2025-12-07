@@ -165,41 +165,50 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
     serviceSelect.setTnf(TNF_WELL_KNOWN);
     serviceSelect.setId(0, 0);
     serviceSelect.setType((const byte*)"Ts", 2);
-    serviceSelect.setPayload((const byte*)"urn:nfc:sn:handover", 19);
+    serviceSelect.setPayload((const byte*)"\x13urn:nfc:sn:handover", 20);
 
     byte messageBuf[300];
     serviceSelect.encode(messageBuf, true, true);
     auto messageSpan = std::span<const uint8_t>(messageBuf, serviceSelect.getEncodedSize());
     printHex("Service Select: ", messageSpan);
 
-    // Write to file: 00 to zero out length field, plus message
+    // Write to file: length + message
     writeSlice.reset();
-    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xD6, 0x00, 0x00, static_cast<uint8_t>(messageSpan.size() + 2), 0, 0}}));
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xD6, 0x00, 0x00, static_cast<uint8_t>(messageSpan.size() + 2), 0, static_cast<uint8_t>(messageSpan.size())}}));
     writeSlice.append(messageSpan);
     readSliceOpt = exchangeData("Writing Service Select message: ", writeSlice.span(), rbuf);
     CHECK_RETURN_OPT(readSliceOpt);
     readSlice = *readSliceOpt;
 
-    // Write message length to file
+    // Read back
     writeSlice.reset();
-    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xD6, 0x00, 0x00, 0x02, 0x00, static_cast<uint8_t>(messageSpan.size())}}));
-    readSliceOpt = exchangeData("Writing Service Select message length: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x2F}}));
+    readSliceOpt =
+        exchangeData("Sending Read binary: ", writeSlice.span(), rbuf);
     CHECK_RETURN_OPT(readSliceOpt);
     readSlice = *readSliceOpt;
 
-    // Is this working??? no idea how you could tell
+    // TODO: check for 0x5465 (Te) + 0x00 (status)
     
-    // Send handover request
-    NdefRecord collisonResolution = NdefRecord();
-    collisonResolution.setTnf(TNF_WELL_KNOWN);
-    collisonResolution.setId(0, 0);
-    collisonResolution.setType((const byte*)"cr", 2);
-    collisonResolution.setPayload((const byte*)"\x26\x84", 2);
+    // Send handover request for BLE
+    // Generated with Kotlin, TODO: understand what this is
+    auto handoverRequestSpan = std::span<const uint8_t>({0x91, 0x02, 0x0A, 0x48, 0x72, 0x15, 0xD1, 0x02, 0x04, 0x61, 0x63, 0x01, 0x01, 0x30, 0x00, 0x1C, 0x1E, 0x06, 0x0A, 0x69, 0x73, 0x6F, 0x2E, 0x6F, 0x72, 0x67, 0x3A, 0x31, 0x38, 0x30, 0x31, 0x33, 0x3A, 0x72, 0x65, 0x61, 0x64, 0x65, 0x72, 0x65, 0x6E, 0x67, 0x61, 0x67, 0x65, 0x6D, 0x65, 0x6E, 0x74, 0x6D, 0x64, 0x6F, 0x63, 0x72, 0x65, 0x61, 0x64, 0x65, 0x72, 0xA1, 0x00, 0x63, 0x31, 0x2E, 0x30, 0x5A, 0x20, 0x15, 0x01, 0x61, 0x70, 0x70, 0x6C, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2F, 0x76, 0x6E, 0x64, 0x2E, 0x62, 0x6C, 0x75, 0x65, 0x74, 0x6F, 0x6F, 0x74, 0x68, 0x2E, 0x6C, 0x65, 0x2E, 0x6F, 0x6F, 0x62, 0x30, 0x02, 0x1C, 0x00, 0x11, 0x07, 0xB9, 0xAF, 0x32, 0xB8, 0x2A, 0x32, 0x86, 0xBB, 0x18, 0x40, 0xE1, 0x2F, 0xF6, 0x78, 0x6A, 0x68});
 
-    NdefRecord carrierRecord = NdefRecord();
-    NdefRecord alternativeCarrierRecord = NdefRecord();
+    // Write to file: length + message
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xD6, 0x00, 0x00, static_cast<uint8_t>(handoverRequestSpan.size() + 2), 0, static_cast<uint8_t>(handoverRequestSpan.size())}}));
+    writeSlice.append(handoverRequestSpan);
+    readSliceOpt = exchangeData("Writing Handover Request: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
 
-    // ???
+    // Read back
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x2F}}));
+    readSliceOpt =
+        exchangeData("Sending Read binary: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
     
     delay(2000);
     return std::nullopt;
