@@ -209,7 +209,8 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
 
     // Read back
     writeSlice.reset();
-    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0xBC}}));
+    // TODOL this length should be dynamically read instead of hardcoded
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0xC4}}));
     readSliceOpt =
         exchangeData("Sending Read binary: ", writeSlice.span(), rbuf);
     CHECK_RETURN_OPT(readSliceOpt);
