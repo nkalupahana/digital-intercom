@@ -30,7 +30,9 @@
     "watch": "npm run build && npm link && nodemon"
   },
   "dependencies": {
-    "homebridge-lib": "^7.1.12"
+    "get-port": "^7.1.0",
+    "homebridge-lib": "^7.1.12",
+    "ip": "^2.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
