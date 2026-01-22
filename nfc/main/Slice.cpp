@@ -173,19 +173,27 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
       CHECK_RETURN_BOOL(
           validateAndAppend({0x00, 0x00, 0x00, 0x00, 0x00, 0x00})); // $0
       break;
+    case 0x9F21: // Transaction Time - n6
+      CHECK_RETURN_BOOL(validateAndAppend({0x12, 0x00, 0x00})); // 12:00:00
+      break;
     case 0x9F37: // Unpredictable Number - b
       CHECK_RETURN_BOOL(validateAndAppend({0x05, 0x01, 0x02, 0x03}));
       break;
-    case 0x9F4E: // Merchant Name and Location - ans
-      CHECK_RETURN_BOOL(validateAndAppend({'a', 'b', 'c', 'd', 'e', 'f', 'g',
-                                           'h', 'i', 'j', 'k', 'l', 'm', 'n',
-                                           'o', 'p', 'q', 'r', 's', 0x00}));
-      break;
+    // case 0x9F4E: // Merchant Name and Location - ans
+
+    //   CHECK_RETURN_BOOL(validateAndAppend({'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    //                                        'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    //                                        'o', 'p', 'q', 'r', 's', 0x00}));
+    //   break;
     case 0x9F66: // Terminal Transaction Qualifiers (TTQ)
       // Base: 37, 80, 40, 00
       // Also works: 37, A0, 40, 00
       // Also works: 37, 20, 40, 00
       CHECK_RETURN_BOOL(validateAndAppend({0x37, 0x20, 0x40, 0x00}));
+      break;
+    case 0x9F6E: // Third Party Data
+      // AMEX: Enhances Contactless Reader Capabities
+      CHECK_RETURN_BOOL(validateAndAppend({0xFF, 0xFF, 0xFF, 0xFF}));
       break;
     case 0x9F1A: // Terminal Country Code - n3
       CHECK_RETURN_BOOL(validateAndAppend({0x08, 0x40})); // US
@@ -195,7 +203,8 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
       break;
     // CDOL testing
     case 0x9F35: // Terminal type (discover?? untested)
-      CHECK_RETURN_BOOL(validateAndAppend({0x25}));
+      CHECK_RETURN_BOOL(validateAndAppend(
+          {0x25})); // 25 – Unattended, Online with offline capability
       break;
     case 0x9F34: // CDM results
       CHECK_RETURN_BOOL(validateAndAppend(
