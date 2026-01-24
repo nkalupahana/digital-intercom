@@ -17,7 +17,7 @@ constexpr size_t PN532_SS = 5;
 constexpr size_t PN532_PACKBUFFSIZ = 255;
 constexpr size_t RECORD_BUFSIZ = 300;
 constexpr size_t CDOL_BUFSIZ = 64;
-constexpr size_t AFL_BUFSIZE = 16;
+constexpr size_t AFL_BUFSIZE = 64;
 constexpr size_t TRACK2_TAG = 0x57;
 constexpr size_t TRACK2_TAG_BUFSIZ = 19;
 
@@ -111,13 +111,23 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
   ReadSlice readSlice{nullptr, 0};
   // Read records
   TLVNode *aflNode = tlvs.findTLV(0x94);
-  CHECK_PRINT_RETURN_BOOL("No AFL data found", aflNode);
+  const uint8_t *aflValue = nullptr;
+  size_t aflLen = 0;
+  if (aflNode == nullptr) {
+    Serial.println("No AFL data found, checking tag 0x80");
+    aflNode = tlvs.findTLV(0x80);
+    CHECK_PRINT_RETURN_BOOL("No AFL or Tag 0x80 data found", aflNode != nullptr);
+    aflValue = aflNode->getValue() + 2;
+    aflLen = aflNode->getValueLength() - 2;
+  } else {
+    aflValue = aflNode->getValue();
+    aflLen = aflNode->getValueLength();
+  }
   static uint8_t aflBuf[AFL_BUFSIZE];
-  size_t aflLen = aflNode->getValueLength();
   CHECK_PRINT_RETURN_BOOL(
       "aflBuf is not large enough - bufLen: %zu - requiredlen: %zu",
       aflLen <= AFL_BUFSIZE, AFL_BUFSIZE, aflLen);
-  memcpy(aflBuf, aflNode->getValue(), aflLen);
+  memcpy(aflBuf, aflValue, aflLen);
   ReadSlice aflSlice{aflBuf, aflLen};
   tlvs.reset();
 

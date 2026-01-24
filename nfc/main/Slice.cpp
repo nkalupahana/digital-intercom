@@ -191,10 +191,11 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
       // Also works: 37, 20, 40, 00
       CHECK_RETURN_BOOL(validateAndAppend({0x37, 0x20, 0x40, 0x00}));
       break;
-    case 0x9F6E: // Third Party Data
+    case 0x9F6E: {// Third Party Data
       // AMEX: Enhances Contactless Reader Capabities
-      CHECK_RETURN_BOOL(validateAndAppend({0xFF, 0xFF, 0xFF, 0xFF}));
+      CHECK_RETURN_BOOL(validateAndAppend({0xD8, 0xF0, 0xC0, 0x00}));
       break;
+    }
     case 0x9F1A: // Terminal Country Code - n3
       CHECK_RETURN_BOOL(validateAndAppend({0x08, 0x40})); // US
       break;
