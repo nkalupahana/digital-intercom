@@ -1,9 +1,3 @@
-[submodule "components/arduino-esp32"]
-	path = nfc/components/arduino-esp32
-	url = git@github.com:espressif/arduino-esp32.git
-[submodule "components/tlv.arduino"]
-	path = nfc/components/tlv.arduino
-	url = git@github.com:Ace314159/tlv.arduino.git
 [submodule "components/PN532-combined/PN532"]
 	path = nfc/components/PN532-combined/PN532
 	url = git@github.com:Ace314159/PN532.git
