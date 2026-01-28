@@ -1,4 +1,38 @@
 dependencies:
+  Adafruit_BusIO:
+    component_hash: 0d4d537b95df2c10a14ddd83025d39269e04017a7b3bc7a5e9baf5ba0ebc8cc7
+    dependencies: []
+    source:
+      git: https://github.com/adafruit/Adafruit_BusIO.git
+      path: .
+      type: git
+    version: 3b8364267c3ee6e16bad91bc2101aefbd5b5915f
+  Adafruit_TLV320_I2S:
+    component_hash: 59d5f9df574373f8df68d77def9252b47f12e16c06daed5b29f5d32f2c997c9c
+    dependencies: []
+    source:
+      git: https://github.com/nkalupahana/Adafruit_TLV320_I2S.git
+      path: .
+      type: git
+    version: b0a57f437d04601c8b69a56702d29d14f4efa5c7
+  RadioHead:
+    component_hash: 9e28ed9e3ed1ffbe2801ac2b10d7d80b51b2fb78b795b994260345087527a7f6
+    dependencies:
+    - name: espressif/arduino-esp32
+      version: ^3.3.5
+    source:
+      git: https://github.com/nkalupahana/radiohead-esp-idf.git
+      path: .
+      type: git
+    version: bc1441cf8a81ed9082ecbba39f1a5a547aa4685d
+  arduino_audio_tools:
+    component_hash: 7891bee1ac2a8f8b330f401343d2f067584d6cfe36b27ba5c37cef4cfa1ae0c9
+    dependencies: []
+    source:
+      git: https://github.com/pschatzmann/arduino-audio-tools.git
+      path: .
+      type: git
+    version: 053efdb6a76fbac5dbb122743b4161cecb017212
   chmorgan/esp-libhelix-mp3:
     component_hash: cbb76089dc2c5749f7b470e2e70aedc44c9da519e04eb9a67d4c7ec275229e53
     dependencies:
@@ -461,7 +495,11 @@ dependencies:
       type: service
     version: 1.20.3
 direct_dependencies:
+- Adafruit_BusIO
+- Adafruit_TLV320_I2S
+- RadioHead
+- arduino_audio_tools
 - espressif/arduino-esp32
-manifest_hash: 26770d1d21e67d981d52a742138a65a33693c81c5d31fc85605853e809a683d2
+manifest_hash: aabedc220b45716ef5a75a1e13e79b76f266d4eb3a36385b6edfbb771fb4d644
 target: esp32
 version: 2.0.0
