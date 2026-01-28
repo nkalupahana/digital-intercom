@@ -464,13 +464,13 @@ dependencies:
     component_hash: e92e4007b22daeec72a69cba8bc3d9194fd60f84e0fcdd983af9b4cce7782686
     dependencies: []
     source:
-      git: git@github.com:Ace314159/tlv.arduino.git
+      git: https://github.com/Ace314159/tlv.arduino.git
       path: .
       type: git
     version: f7425013fdb1ff9f952e2113f06e5a64fe336a17
 direct_dependencies:
 - espressif/arduino-esp32
 - tlv_arduino
-manifest_hash: f43fe501abcf547036b3cc8536d658846a0294005f6443501339bab2b0d06b83
+manifest_hash: 71150f72746c7a6a6ca783ece1e19e3dd4bdd939d535a18363d2f0e380dd59d1
 target: esp32
 version: 2.0.0

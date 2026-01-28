@@ -1,4 +1,4 @@
 dependencies:
   espressif/arduino-esp32: 3.3.5
   tlv_arduino:
-    git: git@github.com:Ace314159/tlv.arduino.git
+    git: https://github.com/Ace314159/tlv.arduino.git
