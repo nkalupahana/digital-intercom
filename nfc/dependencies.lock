@@ -461,7 +461,7 @@ dependencies:
       type: service
     version: 1.20.3
   tlv_arduino:
-    component_hash: e92e4007b22daeec72a69cba8bc3d9194fd60f84e0fcdd983af9b4cce7782686
+    component_hash: da7722fa74c9508836164ca1766088b7d59407192aca48ca9c68dda074e214cb
     dependencies: []
     source:
       git: https://github.com/Ace314159/tlv.arduino.git
