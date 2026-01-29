@@ -42,7 +42,7 @@ dependencies:
       type: service
     version: 1.0.3
   espressif/arduino-esp32:
-    component_hash: dcff5d6fbbe18c30bfe76cd200dc2b1254c98a7116a6835b600ae9076ff8761c
+    component_hash: a26627b8a2fa874cefaa94be09133656ce9f871dce07c6b5639884c277143106
     dependencies:
     - name: chmorgan/esp-libhelix-mp3
       registry_url: https://components.espressif.com
@@ -99,7 +99,7 @@ dependencies:
       require: private
       rules:
       - if: target == esp32p4
-      version: ^2.8.0
+      version: ^2.9.2
     - name: espressif/esp_insights
       registry_url: https://components.espressif.com
       require: private
@@ -175,7 +175,7 @@ dependencies:
     - esp32p4
     - esp32s2
     - esp32s3
-    version: 3.3.5
+    version: 3.3.6
   espressif/cbor:
     component_hash: dad9ca860963e930366510a10b422b3125a4fb27b979712ed65efcbcd742de50
     dependencies:
@@ -498,6 +498,6 @@ direct_dependencies:
 - RadioHead
 - arduino_audio_tools
 - espressif/arduino-esp32
-manifest_hash: aabedc220b45716ef5a75a1e13e79b76f266d4eb3a36385b6edfbb771fb4d644
+manifest_hash: bf844e9a88ac2c991610960f1bb92334d3bf51776fd88c3e52b0bb6926cb46bf
 target: esp32
 version: 2.0.0

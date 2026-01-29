@@ -1,5 +1,5 @@
 dependencies:
-  espressif/arduino-esp32: 3.3.5
+  espressif/arduino-esp32: 3.3.6
   arduino_audio_tools:
     git: https://github.com/pschatzmann/arduino-audio-tools.git
   Adafruit_TLV320_I2S:
