@@ -1,6 +1,6 @@
 dependencies:
   Adafruit_BusIO:
-    component_hash: d6f248607ac44b04f6b3c9d8478253284395d0b450e406a61a654e06ddb18e04
+    component_hash: 0d4d537b95df2c10a14ddd83025d39269e04017a7b3bc7a5e9baf5ba0ebc8cc7
     dependencies: []
     source:
       git: https://github.com/adafruit/Adafruit_BusIO.git
@@ -8,7 +8,7 @@ dependencies:
       type: git
     version: 3b8364267c3ee6e16bad91bc2101aefbd5b5915f
   Adafruit_TLV320_I2S:
-    component_hash: cb664902c1ff077ac17796e8539945e9dbc4d775fb3c213d908e579ca2b42b98
+    component_hash: 59d5f9df574373f8df68d77def9252b47f12e16c06daed5b29f5d32f2c997c9c
     dependencies: []
     source:
       git: https://github.com/nkalupahana/Adafruit_TLV320_I2S.git
@@ -16,7 +16,7 @@ dependencies:
       type: git
     version: b0a57f437d04601c8b69a56702d29d14f4efa5c7
   RadioHead:
-    component_hash: 2a6112c18204b8495bb57999bd3e1bef1e748f2d7e6732c32bdb632b7b85ec15
+    component_hash: 77275f4f18e412979b1db94ae9f190f6d2db7ed05d9ac12d91fcbb2873dcaf2d
     dependencies: []
     source:
       git: https://github.com/nkalupahana/radiohead-esp-idf.git
@@ -24,7 +24,7 @@ dependencies:
       type: git
     version: 39fb37ed113b00cfb5ad12b7ae8d560b6a254ea8
   arduino_audio_tools:
-    component_hash: 9d991a0128840f61d249cef273a57099e6317fa5bebd125937262d2ac5b4646a
+    component_hash: 7891bee1ac2a8f8b330f401343d2f067584d6cfe36b27ba5c37cef4cfa1ae0c9
     dependencies: []
     source:
       git: https://github.com/pschatzmann/arduino-audio-tools.git
