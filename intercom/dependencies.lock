@@ -24,13 +24,13 @@ dependencies:
       type: git
     version: 39fb37ed113b00cfb5ad12b7ae8d560b6a254ea8
   arduino_audio_tools:
-    component_hash: 7891bee1ac2a8f8b330f401343d2f067584d6cfe36b27ba5c37cef4cfa1ae0c9
+    component_hash: 7b57e1de1f77a5b1763c403a072d69843da2eb55cd56d6355f99317e9da93337
     dependencies: []
     source:
       git: https://github.com/pschatzmann/arduino-audio-tools.git
       path: .
       type: git
-    version: 053efdb6a76fbac5dbb122743b4161cecb017212
+    version: 4b1fa7aa10971aebb33436c395a03eb89aaf6a43
   chmorgan/esp-libhelix-mp3:
     component_hash: cbb76089dc2c5749f7b470e2e70aedc44c9da519e04eb9a67d4c7ec275229e53
     dependencies:
@@ -481,9 +481,9 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 5.5.2
   joltwallet/littlefs:
-    component_hash: 1808d73e99168f6f3c26dd31799a248484762b3a320ec4962dec11a145f4277f
+    component_hash: dcea25bcef2de023f089f5f01e8d8c46ad1b8ffef75861ad5ffb4098555839df
     dependencies:
     - name: idf
       require: private
@@ -491,7 +491,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.20.3
+    version: 1.20.4
 direct_dependencies:
 - Adafruit_BusIO
 - Adafruit_TLV320_I2S

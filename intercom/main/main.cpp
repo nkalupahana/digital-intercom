@@ -1,3 +1,4 @@
+#include "../../../constants.h"
 #include <Adafruit_TLV320DAC3100.h>
 #include <Arduino.h>
 #include <AudioTools.h>
@@ -7,7 +8,6 @@
 #include <ESP_I2S.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
-#include "../../../constants.h"
 
 // Idle - Radio
 RH_RF69 driver(SS, 26);
@@ -21,7 +21,7 @@ constexpr int OPEN_DOOR_TIME = 1000;
 
 // Listen
 constexpr float AUDIO_SCALE = 20;
-AudioInfo info(22050, 1, 16);
+AudioInfo info(32000, 1, 16);
 AnalogAudioStream audioInAnalog;
 UDPStream audioOutUdp(WIFI_SSID, WIFI_PASSWORD);
 VolumeStream volume((AudioOutput &)audioOutUdp);
@@ -30,7 +30,7 @@ constexpr int LISTEN_RELAY_PIN = 33;
 
 enum class State { IDLE, OPEN_DOOR, LISTEN };
 
-State state = State::IDLE;
+State state = State::LISTEN;
 
 void setup() {
   Serial.begin(115200);
@@ -49,6 +49,7 @@ void setup() {
     Serial.println("Waiting for radio to initialize...");
     delay(1000);
   }
+  Serial.printf("Bridge IP: %s\n", UDP_TARGET_IP);
 
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
@@ -60,7 +61,7 @@ void setup() {
   // Listen
   pinMode(LISTEN_RELAY_PIN, OUTPUT);
   digitalWrite(LISTEN_RELAY_PIN, LOW);
-  AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Info);
+  AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Error);
   audioOutUdp.begin(UDP_TARGET_IP,
                     atoi(UDP_TARGET_PORT)); // TODO: do not atoi
 
@@ -79,7 +80,8 @@ void setup() {
 }
 
 void loop() {
-  if (state == State::IDLE) {
+  switch (state) {
+  case State::IDLE: {
     /// Reset everything to base state
     // Radio
     if (manager.available()) {
@@ -103,9 +105,10 @@ void loop() {
 
     // Listen
     digitalWrite(LISTEN_RELAY_PIN, LOW);
-
+    break;
     // TODO: Listen for tone in
-  } else if (state == State::OPEN_DOOR) {
+  }
+  case State::OPEN_DOOR: {
     Serial.println("Opening door...");
     digitalWrite(DOOR_RELAY_PIN, HIGH);
     delay(OPEN_DOOR_TIME);
@@ -113,10 +116,14 @@ void loop() {
 
     Serial.println("Door opened, returning to idle.");
     state = State::IDLE;
-  } else if (state == State::LISTEN) {
+    break;
+  }
+  case State::LISTEN: {
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
-  }
 
-  delay(10);
+    delay(10);
+    break;
+  }
+  }
 }

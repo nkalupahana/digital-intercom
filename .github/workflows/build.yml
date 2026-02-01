@@ -12,7 +12,7 @@ jobs:
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
       with:
-        esp_idf_version: v5.5.1
+        esp_idf_version: v5.5.2
         target: esp32
         path: 'nfc'
   intercom-build:
@@ -26,6 +26,6 @@ jobs:
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
       with:
-        esp_idf_version: v5.5.1
+        esp_idf_version: v5.5.2
         target: esp32
         path: 'intercom'
