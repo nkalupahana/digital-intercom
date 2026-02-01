@@ -1,9 +1,9 @@
-#include "AudioTools/Communication/UDPStream.h"
-#include "AudioTools/CoreAudio/AudioOutput.h"
-#include "AudioTools/CoreAudio/AudioTypes.h"
 #include <Adafruit_TLV320DAC3100.h>
 #include <Arduino.h>
 #include <AudioTools.h>
+#include <AudioTools/Communication/UDPStream.h>
+#include <AudioTools/CoreAudio/AudioOutput.h>
+#include <AudioTools/CoreAudio/AudioTypes.h>
 #include <ESP_I2S.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
@@ -61,7 +61,8 @@ void setup() {
   pinMode(LISTEN_RELAY_PIN, OUTPUT);
   digitalWrite(LISTEN_RELAY_PIN, LOW);
   AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Info);
-  audioOutUdp.begin(UDP_TARGET_IP, atoi(UDP_TARGET_PORT)); // TODO: do not atoi
+  audioOutUdp.begin(UDP_TARGET_IP,
+                    atoi(UDP_TARGET_PORT)); // TODO: do not atoi
 
   auto config_vol = volume.defaultConfig();
   config_vol.copyFrom(info);
