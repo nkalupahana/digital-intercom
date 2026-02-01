@@ -32,6 +32,7 @@
   "dependencies": {
     "get-port": "^7.1.0",
     "homebridge-lib": "^7.1.12",
+    "homebridge-plugin-utils": "^1.30.0",
     "ip": "^2.0.1"
   },
   "devDependencies": {

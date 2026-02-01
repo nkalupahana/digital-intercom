@@ -7,7 +7,6 @@ export default tseslint.config(
   },
   {
     rules: {
-      'quotes': ['error', 'single'],
       'indent': ['error', 2, { 'SwitchCase': 0 }],
       'linebreak-style': ['error', 'unix'],
       'semi': ['error', 'always'],

@@ -1,12 +1,16 @@
 import { AudioStreamingCodecType, AudioStreamingSamplerate, PrepareStreamResponse, SRTPCryptoSuites, StartStreamRequest, StreamRequestTypes, type CameraController, type CameraControllerOptions, type CameraStreamingDelegate, type HAP, type PrepareStreamCallback, type PrepareStreamRequest, type SnapshotRequest, type SnapshotRequestCallback, type StreamingRequest, type StreamRequestCallback } from 'homebridge';
 import { ExamplePlatformAccessory } from './platformAccessory.js';
 import getPort from 'get-port';
+import { exec } from 'node:child_process';
+import { FfmpegCodecs, FfmpegOptions, Nullable, RtpDemuxer, RtpPortAllocator } from 'homebridge-plugin-utils';
+import { stderr } from 'node:process';
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
 
 type SessionInfo = {
   address: string; // Address of the HAP controller.
+  addressVersion: "ipv4" | "ipv6";
 
   videoPort: number;
   videoReturnPort: number;
@@ -15,16 +19,28 @@ type SessionInfo = {
   videoSSRC: number; // RTP synchronisation source.
 
   audioPort: number;
-  audioReturnPort: number;
   audioCryptoSuite: SRTPCryptoSuites;
   audioSRTP: Buffer;
   audioSSRC: number;
+  audioIncomingRtpPort: number;
+  audioIncomingRtcpPort: number;
+  audioIncomingPort: number;
+
+  rtpDemuxer: RtpDemuxer;
 };
 
 export class IntercomStreamingDelegate implements CameraStreamingDelegate {
   private accessory: ExamplePlatformAccessory;
   private hap: HAP;
   private pendingSessions: Record<string, SessionInfo> = {};
+  private readonly rtpPorts = new RtpPortAllocator();
+  private ffmpegOptions = new FfmpegOptions({
+    codecSupport: new FfmpegCodecs({ log: console }),
+    hardwareDecoding: true,
+    hardwareTranscoding: true,
+    log: console,
+    name: () => "Intercom Streaming Delegate",
+  });
   controller: CameraController;
 
   constructor(paccessory: ExamplePlatformAccessory) {
@@ -76,26 +92,60 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     throw new Error('Method not implemented.');
   }
   async prepareStream(request: PrepareStreamRequest, callback: PrepareStreamCallback): Promise<void> {
-    console.log(request)
+    console.log(request);
     const videoReturnPort = await getPort();
     const videoSSRC = this.hap.CameraController.generateSynchronisationSource();
-    const audioReturnPort = await getPort();
     const audioSSRC = this.hap.CameraController.generateSynchronisationSource();
+
+    let reservePortFailed = false;
+    const rtpPortReservations: number[] = [];
+    const reservePort = async (ipFamily: ("ipv4" | "ipv6") = "ipv4", portCount: (1 | 2) = 1): Promise<number> => {
+      // If we've already failed, don't keep trying to find more ports.
+      if (reservePortFailed) {
+        return -1;
+      }
+
+      // Retrieve the ports we're looking for.
+      const assignedPort = await this.rtpPorts.reserve(ipFamily, portCount);
+
+      // We didn't get the ports we requested.
+      if(assignedPort === -1) {
+        reservePortFailed = true;
+      } else {
+        // Add this reservation the list of ports we've successfully requested.
+        rtpPortReservations.push(assignedPort);
+        if (portCount === 2) {
+          rtpPortReservations.push(assignedPort + 1);
+        }
+      }
+
+      // Return them.
+      return assignedPort;
+    };
+
+    const audioIncomingRtcpPort = (await reservePort(request.addressVersion));
+    const audioIncomingPort = await reservePort(request.addressVersion);
+    const audioIncomingRtpPort = await reservePort(request.addressVersion, 2);
+    const rtpDemuxer = new RtpDemuxer(request.addressVersion, audioIncomingPort, audioIncomingRtcpPort, audioIncomingRtpPort, console);
 
     const sessionInfo: SessionInfo = {
       address: request.targetAddress,
+      addressVersion: request.addressVersion,
 
       videoPort: request.video.port,
       videoReturnPort: videoReturnPort,
       videoCryptoSuite: request.video.srtpCryptoSuite,
       videoSRTP: Buffer.concat([request.video.srtp_key, request.video.srtp_salt]),
       videoSSRC: videoSSRC,
+      rtpDemuxer,
 
       audioPort: request.audio.port,
-      audioReturnPort: audioReturnPort,
       audioCryptoSuite: request.audio.srtpCryptoSuite,
       audioSRTP: Buffer.concat([request.audio.srtp_key, request.audio.srtp_salt]),
       audioSSRC: audioSSRC,
+      audioIncomingRtpPort: audioIncomingRtpPort,
+      audioIncomingRtcpPort: audioIncomingRtcpPort,
+      audioIncomingPort: audioIncomingPort,
     };
     this.pendingSessions[request.sessionID] = sessionInfo;
 
@@ -109,7 +159,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       },
 
       audio: {
-        port: audioReturnPort,
+        port: audioIncomingPort,
         ssrc: audioSSRC,
 
         srtp_key: request.audio.srtp_key,
@@ -164,6 +214,55 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     // const debugFlag = this.platform.debugMode ? ' -loglevel debug' : '';
     const fcmd = `${videoInput} ${audioInput}${ffmpegVideoArgs}${ffmpegVideoStream}${ffmpegAudioFull}`;
     console.log('ffmpeg', fcmd);
+    const ret = exec(`/Users/nisala/.nix-profile/bin/ffmpeg ${fcmd}`);
+    console.log('created process', ret.pid);
+
+    const sdpIpVersion = sessionInfo.addressVersion === "ipv6" ? "IP6" : "IP4";
+
+    const sdpReturnAudio = [
+      "v=0",
+      "o=- 0 0 IN " + sdpIpVersion + " 127.0.0.1",
+      "s=" + "Akash Audio Talkback",
+      "c=IN " + sdpIpVersion + " " + sessionInfo.address,
+      "t=0 0",
+      "m=audio " + sessionInfo.audioIncomingRtpPort.toString() + " RTP/AVP " + request.audio.pt.toString(),
+      "b=AS:24",
+      "a=rtpmap:110 MPEG4-GENERIC/" + ((request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16) ? "16000" : "24000") + "/" + request.audio.channel.toString(),
+      "a=fmtp:110 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=" +
+        ((request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16) ? "F8F0212C00BC00" : "F8EC212C00BC00"),
+      "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:" + sessionInfo.audioSRTP.toString("base64")
+    ].join("\n");
+
+    const ffmpegReturnAudioCmd = [
+      "-hide_banner",
+      "-nostats",
+      "-protocol_whitelist", "crypto,file,pipe,rtp,udp",
+      "-f", "sdp",
+      "-codec:a", this.ffmpegOptions.audioDecoder,
+      "-i", "pipe:0",
+      "-map", "0:a:0",
+      ...this.ffmpegOptions.audioEncoder(),
+      "-flags", "+global_header",
+      "-ar", "44100",//this.protectCamera.ufp.talkbackSettings.samplingRate.toString(),
+      "-b:a", request.audio.max_bit_rate.toString() + "k",
+      "-ac", "1", //this.protectCamera.ufp.talkbackSettings.channels.toString(),
+      "-f", "mp3",
+      "/tmp/output.mp3"
+    ];
+
+    const ret2 = exec(`/Users/nisala/.nix-profile/bin/ffmpeg ${ffmpegReturnAudioCmd.join(" ")}`, (error, stdout, stderr) => {
+      console.log('error', error);
+      console.log('stdout', stdout);
+      console.log('stderr', stderr);
+    });
+    console.log('created return process', ret2.pid);
+    ret2.stdin?.end(sdpReturnAudio + "\n");
+
+    setTimeout(() => {
+      console.log("process still running?", ret2.killed);
+      console.log('killing return process');
+      ret2.kill();
+    }, 5000);
 
     callback(undefined);
   }
