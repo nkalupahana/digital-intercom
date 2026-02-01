@@ -5,7 +5,15 @@
 #include <Arduino.h>
 #include <AudioTools.h>
 #include <ESP_I2S.h>
-#include <RadioHead.h>
+#include <RHReliableDatagram.h>
+#include <RH_RF69.h>
+#include "../../../constants.h"
+
+// Idle - Radio
+RH_RF69 driver(SS, 26);
+RHReliableDatagram manager(driver, RADIO_INTERCOM_ADDRESS);
+uint8_t msgBuf[RH_RF69_MAX_MESSAGE_LEN];
+constexpr int RADIO_RESET_PIN = 16;
 
 // Open door
 constexpr int DOOR_RELAY_PIN = 25;
@@ -22,11 +30,28 @@ constexpr int LISTEN_RELAY_PIN = 33;
 
 enum class State { IDLE, OPEN_DOOR, LISTEN };
 
-State state = State::LISTEN;
+State state = State::IDLE;
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Initializing digital intercom...");
+
+  // Idle - Radio
+  pinMode(RADIO_RESET_PIN, OUTPUT);
+  digitalWrite(RADIO_RESET_PIN, LOW);
+  delay(100);
+  digitalWrite(RADIO_RESET_PIN, HIGH);
+  delay(100);
+  digitalWrite(RADIO_RESET_PIN, LOW);
+  delay(100);
+  bool radioInitialized = manager.init();
+  if (!radioInitialized) {
+    Serial.println("Waiting for radio to initialize...");
+    delay(1000);
+  }
+
+  driver.setTxPower(RADIO_POWER, true);
+  driver.setFrequency(RADIO_FREQUENCY);
 
   // Open door
   pinMode(DOOR_RELAY_PIN, OUTPUT);
@@ -55,6 +80,23 @@ void setup() {
 void loop() {
   if (state == State::IDLE) {
     /// Reset everything to base state
+    // Radio
+    if (manager.available()) {
+      Serial.println("Radio message received.");
+      uint8_t len = sizeof(msgBuf);
+      uint8_t from;
+
+      if (manager.recvfromAck(msgBuf, &len, &from)) {
+        Serial.print("got request from : 0x");
+        Serial.print(from, HEX);
+        Serial.print(": ");
+        for (int i = 0; i < len; i++) {
+          Serial.print(msgBuf[i], HEX);
+        }
+        Serial.println();
+      }
+    }
+
     // Open door
     digitalWrite(DOOR_RELAY_PIN, LOW);
 

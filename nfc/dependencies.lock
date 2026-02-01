@@ -1,4 +1,12 @@
 dependencies:
+  RadioHead:
+    component_hash: 77275f4f18e412979b1db94ae9f190f6d2db7ed05d9ac12d91fcbb2873dcaf2d
+    dependencies: []
+    source:
+      git: https://github.com/nkalupahana/radiohead-esp-idf.git
+      path: .
+      type: git
+    version: 39fb37ed113b00cfb5ad12b7ae8d560b6a254ea8
   chmorgan/esp-libhelix-mp3:
     component_hash: cbb76089dc2c5749f7b470e2e70aedc44c9da519e04eb9a67d4c7ec275229e53
     dependencies:
@@ -451,7 +459,7 @@ dependencies:
       type: idf
     version: 5.5.1
   joltwallet/littlefs:
-    component_hash: 1808d73e99168f6f3c26dd31799a248484762b3a320ec4962dec11a145f4277f
+    component_hash: dcea25bcef2de023f089f5f01e8d8c46ad1b8ffef75861ad5ffb4098555839df
     dependencies:
     - name: idf
       require: private
@@ -459,9 +467,9 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.20.3
+    version: 1.20.4
   tlv_arduino:
-    component_hash: da7722fa74c9508836164ca1766088b7d59407192aca48ca9c68dda074e214cb
+    component_hash: e92e4007b22daeec72a69cba8bc3d9194fd60f84e0fcdd983af9b4cce7782686
     dependencies: []
     source:
       git: https://github.com/Ace314159/tlv.arduino.git
@@ -469,8 +477,9 @@ dependencies:
       type: git
     version: f7425013fdb1ff9f952e2113f06e5a64fe336a17
 direct_dependencies:
+- RadioHead
 - espressif/arduino-esp32
 - tlv_arduino
-manifest_hash: 71150f72746c7a6a6ca783ece1e19e3dd4bdd939d535a18363d2f0e380dd59d1
+manifest_hash: e1ac11e4c308495655536c57187936eeaa4a20762a20306e1b6b9a6643580583
 target: esp32
 version: 2.0.0

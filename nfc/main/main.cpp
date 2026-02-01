@@ -1,5 +1,6 @@
 // #define MIFAREDEBUG
 // #define PN532DEBUG
+#define RH_ESP32_USE_HSPI
 #include "SPI.h"
 #include "Slice.h"
 #include "errors.h"
@@ -11,6 +12,9 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <RHReliableDatagram.h>
+#include <RH_RF69.h>
+#include "../../../constants.h"
 
 constexpr size_t PN532_SS = 5;
 
@@ -24,16 +28,36 @@ constexpr size_t TRACK2_TAG_BUFSIZ = 19;
 PN532_SPI pn532spi(SPI, PN532_SS);
 PN532 nfc(pn532spi);
 
+// Radio
+RH_RF69 driver(15, 26);
+RHReliableDatagram manager(driver, RADIO_SCANNER_ADDRESS);
+constexpr int RADIO_RESET_PIN = 16;
+
 void setup() {
   Serial.begin(115200);
+
+  pinMode(RADIO_RESET_PIN, OUTPUT);
+  digitalWrite(RADIO_RESET_PIN, LOW);
+  delay(100);
+  digitalWrite(RADIO_RESET_PIN, HIGH);
+  delay(100);
+  digitalWrite(RADIO_RESET_PIN, LOW);
+  delay(100);
 
   Serial.println("HELLO!");
   nfc.begin();
 
-  uint32_t versiondata = 0;
+  uint32_t versiondata = nfc.getFirmwareVersion();
   while (!versiondata) {
     Serial.println("Waiting for PN532 to initialize...");
     versiondata = nfc.getFirmwareVersion();
+    delay(1000);
+  }
+
+  bool radioInitialized = manager.init();
+  while (!radioInitialized) {
+    Serial.println("Waiting for radio to initialize...");
+    radioInitialized = manager.init();
     delay(1000);
   }
 
@@ -52,6 +76,11 @@ void setup() {
   if (!nfc.setPassiveActivationRetries(0x00)) {
     Serial.println("Failed to configure retries!");
   }
+
+  driver.setTxPower(RADIO_POWER, true); // TODO: tune to lowest power possible
+  driver.setFrequency(RADIO_FREQUENCY);
+
+  Serial.println("Ready!");
 }
 
 void printHex(const char *pre, std::span<const uint8_t> data) {
@@ -316,5 +345,13 @@ void loop() {
   CHECK_RETURN(track2DataOpt);
   const std::span<const uint8_t> track2Data = *track2DataOpt;
   printHex("Track 2 Equivalent Data: ", track2Data);
+  Serial.printf("Dat length: %d\n", track2Data.size());
+  bool success = manager.sendtoWait(const_cast<uint8_t*>(track2Data.data()), track2Data.size(), RADIO_INTERCOM_ADDRESS);
+  if (success) {
+    Serial.println("Data sent successfully");
+  } else {
+    Serial.println("Data send failed");
+  }
+
   delay(3000);
 }
