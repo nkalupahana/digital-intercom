@@ -1,7 +1,9 @@
+#include "AudioTools/Communication/UDPStream.h"
+#include "AudioTools/CoreAudio/AudioOutput.h"
+#include "AudioTools/CoreAudio/AudioTypes.h"
+#include <Adafruit_TLV320DAC3100.h>
 #include <Arduino.h>
 #include <AudioTools.h>
-#include "AudioTools/Communication/UDPStream.h"
-#include <Adafruit_TLV320DAC3100.h>
 #include <ESP_I2S.h>
 #include <RadioHead.h>
 
@@ -10,17 +12,15 @@ constexpr int DOOR_RELAY_PIN = 25;
 constexpr int OPEN_DOOR_TIME = 1000;
 
 // Listen
+constexpr float AUDIO_SCALE = 20;
 AudioInfo info(22050, 1, 16);
 AnalogAudioStream audioInAnalog;
 UDPStream audioOutUdp(WIFI_SSID, WIFI_PASSWORD);
-StreamCopy audioOutCopier(audioOutUdp, audioInAnalog);
+VolumeStream volume((AudioOutput &)audioOutUdp);
+StreamCopy audioOutCopier(volume, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
 
-enum class State {
-  IDLE,
-  OPEN_DOOR,
-  LISTEN
-};
+enum class State { IDLE, OPEN_DOOR, LISTEN };
 
 State state = State::LISTEN;
 
@@ -38,7 +38,13 @@ void setup() {
   AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Info);
   audioOutUdp.begin(UDP_TARGET_IP, atoi(UDP_TARGET_PORT)); // TODO: do not atoi
 
-  auto analogInConfig = audioInAnalog.defaultConfig(RX_MODE);  
+  auto config_vol = volume.defaultConfig();
+  config_vol.copyFrom(info);
+  config_vol.allow_boost = true;
+  config_vol.volume = AUDIO_SCALE;
+  volume.begin(config_vol);
+
+  auto analogInConfig = audioInAnalog.defaultConfig(RX_MODE);
   analogInConfig.copyFrom(info);
   analogInConfig.channels = 1;
   audioInAnalog.begin(analogInConfig);
@@ -64,7 +70,7 @@ void loop() {
 
     Serial.println("Door opened, returning to idle.");
     state = State::IDLE;
-  } else if (state == State::LISTEN) {    
+  } else if (state == State::LISTEN) {
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
   }
