@@ -2,8 +2,7 @@ import { AudioStreamingCodecType, AudioStreamingSamplerate, PrepareStreamRespons
 import { ExamplePlatformAccessory } from './platformAccessory.js';
 import getPort from 'get-port';
 import { exec } from 'node:child_process';
-import { FfmpegCodecs, FfmpegOptions, Nullable, RtpDemuxer, RtpPortAllocator } from 'homebridge-plugin-utils';
-import { stderr } from 'node:process';
+import { FfmpegCodecs, FfmpegOptions, RtpDemuxer, RtpPortAllocator } from 'homebridge-plugin-utils';
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
@@ -75,6 +74,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
         audio: {
           twoWayAudio: true,
           codecs: [
+            // TODO: changing these values seems to do nothing
             {
               type: AudioStreamingCodecType.AAC_ELD,
               samplerate: AudioStreamingSamplerate.KHZ_16,
@@ -192,7 +192,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
-    const audioInput = `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -f u16le -ar 22050 -ac 1 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=1"`;
+    const audioInput = `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -f u16le -ar 32000 -ac 1 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`;
 
     // 2. VIDEO ARGUMENTS
     const ffmpegVideoArgs = ` -map 0:0 -vcodec libx264 -pix_fmt yuvj420p -r ${request.video.fps} -f rawvideo -probesize 32 -analyzeduration 0 -fflags nobuffer -preset veryfast -refs 1 -x264-params intra-refresh=1:bframes=0 -b:v ${request.video.max_bit_rate}k -bufsize ${2 * request.video.max_bit_rate}k -maxrate ${request.video.max_bit_rate}k -payload_type ${request.video.pt}`;
@@ -230,7 +230,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "a=rtpmap:110 MPEG4-GENERIC/" + ((request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16) ? "16000" : "24000") + "/" + request.audio.channel.toString(),
       "a=fmtp:110 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=" +
         ((request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16) ? "F8F0212C00BC00" : "F8EC212C00BC00"),
-      "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:" + sessionInfo.audioSRTP.toString("base64")
+      "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:" + sessionInfo.audioSRTP.toString("base64"),
     ].join("\n");
 
     const ffmpegReturnAudioCmd = [
@@ -247,7 +247,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "-b:a", request.audio.max_bit_rate.toString() + "k",
       "-ac", "1", //this.protectCamera.ufp.talkbackSettings.channels.toString(),
       "-f", "mp3",
-      "/tmp/output.mp3"
+      "/tmp/output.mp3",
     ];
 
     const ret2 = exec(`/Users/nisala/.nix-profile/bin/ffmpeg ${ffmpegReturnAudioCmd.join(" ")}`, (error, stdout, stderr) => {
