@@ -192,7 +192,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
-    const audioInput = `-i /Users/nisala/Downloads/mybad.m4a`;
+    const audioInput = `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -f u16le -ar 22050 -ac 1 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=1"`;
 
     // 2. VIDEO ARGUMENTS
     const ffmpegVideoArgs = ` -map 0:0 -vcodec libx264 -pix_fmt yuvj420p -r ${request.video.fps} -f rawvideo -probesize 32 -analyzeduration 0 -fflags nobuffer -preset veryfast -refs 1 -x264-params intra-refresh=1:bframes=0 -b:v ${request.video.max_bit_rate}k -bufsize ${2 * request.video.max_bit_rate}k -maxrate ${request.video.max_bit_rate}k -payload_type ${request.video.pt}`;
