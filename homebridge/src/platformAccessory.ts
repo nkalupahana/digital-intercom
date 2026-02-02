@@ -1,6 +1,7 @@
-import type { HAP, PlatformAccessory } from 'homebridge';
+import { Characteristic, CharacteristicEventTypes, CharacteristicGetCallback, type HAP, type PlatformAccessory } from 'homebridge';
 import type { ExampleHomebridgePlatform } from './platform.js';
 import { IntercomStreamingDelegate } from './streamingDelegate.js';
+import { acquireService } from 'homebridge-plugin-utils';
 export class ExamplePlatformAccessory {
   hap: HAP;
   private accessory: PlatformAccessory;
@@ -25,5 +26,18 @@ export class ExamplePlatformAccessory {
     doorbellService.setPrimaryService(true);
     this.streamingDelegate = new IntercomStreamingDelegate(this);
     this.accessory.configureController(this.streamingDelegate.controller);
+
+    this.accessory.addService(doorbellService)
+      .getCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent)
+      .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
+        // HomeKit wants this to always be null.
+        callback(null, null);
+      });
+
+    // Test doorbell
+    // setTimeout(() => {
+    //   console.log("DING DONG");
+    //   doorbellService.getCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent).setValue(this.hap.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS);
+    // }, 5000);
   }
 }
