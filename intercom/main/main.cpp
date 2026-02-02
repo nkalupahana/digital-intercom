@@ -9,6 +9,17 @@
 #include <ESP_I2S.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
+#include <cerrno>
+#include <cstring>
+#include <esp_netif.h>
+#include <optional>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#define STR(str) #str
+#define STRING(str) STR(str)
+
+constexpr const char *TAG = "intercom";
 
 // Idle - Radio
 RH_RF69 driver(SS, 26);
@@ -28,16 +39,93 @@ constexpr int OPEN_DOOR_TIME = 1000;
 constexpr float AUDIO_SCALE = 20;
 AudioInfo info(32000, 1, 16);
 AnalogAudioStream audioInAnalog;
-UDPStream audioOutUdp(WIFI_SSID, WIFI_PASSWORD);
+UDPStream audioOutUdp(STRING(WIFI_SSID), STRING(WIFI_PASSWORD));
 VolumeStream volume((AudioOutput &)audioOutUdp);
 StreamCopy audioOutCopier(volume, audioInAnalog);
 VolumeMeter volumeMeter;
 StreamCopy audioMonitorCopier(volumeMeter, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
 
-enum class State { IDLE, OPEN_DOOR, LISTEN };
+// TCP Server
+int tcpSocket = -1;
+
+enum class State { IDLE, LISTEN };
+enum class Command {
+  OPEN_DOOR = 'D',
+  LISTEN_ON = 'L',
+  LISTEN_STOP = 'S',
+  RESET = 'R', // Internal only command. Not sent by the TCP server
+};
 
 State state = State::IDLE;
+
+void connectToTCPServer() {
+  if (tcpSocket > 0) {
+    ESP_LOGI(TAG, "Closing existing TCP socket");
+    close(tcpSocket);
+  }
+
+  struct sockaddr_in dest_addr;
+  dest_addr.sin_addr.s_addr = inet_addr(STRING(BRIDGE_IP));
+  dest_addr.sin_family = AF_INET;
+  dest_addr.sin_port = htons(TCP_PORT);
+
+  while (true) {
+    ESP_LOGI(TAG, "Creating TCP socket");
+    tcpSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (tcpSocket < 0) {
+      ESP_LOGE(TAG, "Unable to create socket. Trying again: %s\n",
+               strerror(errno));
+      continue;
+    }
+    ESP_LOGI(TAG, "Trying to connect to %s:%d", STRING(BRIDGE_IP), TCP_PORT);
+    int result =
+        connect(tcpSocket, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    if (result == 0) {
+      break;
+    }
+    ESP_LOGE(TAG, "Unable to connect to %s:%d: %s", STRING(BRIDGE_IP), TCP_PORT,
+             strerror(errno));
+  }
+  ESP_LOGI(TAG, "Successfully connected to %s:%d", STRING(BRIDGE_IP), TCP_PORT);
+}
+
+std::optional<Command> getCommand() {
+  char cmd = '\x00';
+  int result = recv(tcpSocket, &cmd, 1, MSG_DONTWAIT);
+  if (result == 0) {
+    // 0 means socket a peer performed an orderly shutdown, but we still want to
+    // connect
+    ESP_LOGE(TAG,
+             "Peer performed an orderly shutdown. Attempting to reconnect");
+    connectToTCPServer();
+    return Command::RESET;
+  }
+  if (result <= 0) {
+    if (errno == EAGAIN && errno == EWOULDBLOCK) {
+      return std::nullopt;
+    }
+    ESP_LOGE(TAG, "Failed to recv data %s. Attempting to reconnect",
+             strerror(errno));
+    connectToTCPServer();
+    return Command::RESET;
+  }
+  ESP_LOGI(TAG, "Got cmd %c %d", cmd, result);
+  switch (cmd) {
+  case (char)Command::OPEN_DOOR:
+    return Command::OPEN_DOOR;
+  case (char)Command::LISTEN_ON:
+    return Command::LISTEN_ON;
+  case (char)Command::LISTEN_STOP:
+    return Command::LISTEN_STOP;
+  default:
+    ESP_LOGE(TAG,
+             "Got unexpected command. Going to disconnect and reconnect: %c",
+             cmd);
+    connectToTCPServer();
+    return Command::RESET;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -56,7 +144,7 @@ void setup() {
     Serial.println("Waiting for radio to initialize...");
     delay(1000);
   }
-  Serial.printf("Bridge IP: %s\n", UDP_TARGET_IP);
+  Serial.printf("Bridge IP: %s\n", STRING(BRIDGE_IP));
 
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
@@ -65,12 +153,12 @@ void setup() {
   pinMode(DOOR_RELAY_PIN, OUTPUT);
   digitalWrite(DOOR_RELAY_PIN, LOW);
 
+  Serial.println("Setting up Audio Tools");
   // Listen
   pinMode(LISTEN_RELAY_PIN, OUTPUT);
   digitalWrite(LISTEN_RELAY_PIN, LOW);
   AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Warning);
-  audioOutUdp.begin(UDP_TARGET_IP,
-                    atoi(UDP_TARGET_PORT)); // TODO: do not atoi
+  audioOutUdp.begin(STRING(BRIDGE_IP), AUDIO_OUT_PORT);
 
   auto config_vol = volume.defaultConfig();
   config_vol.copyFrom(info);
@@ -86,12 +174,45 @@ void setup() {
   // Idle - doorbell
   volumeMeter.begin(analogInConfig);
 
+  Serial.println("Setting up TCP Server");
+  connectToTCPServer();
+
   Serial.println("Digital intercom initialized.");
 }
 
 int last_trigger_time = 0;
 
 void loop() {
+  std::optional<Command> cmd = getCommand();
+  if (cmd) {
+    ESP_LOGI(TAG, "Got command: %c\n", *cmd);
+    switch (*cmd) {
+    case Command::OPEN_DOOR: {
+      ESP_LOGI(TAG, "Opening door...");
+      digitalWrite(DOOR_RELAY_PIN, HIGH);
+      delay(OPEN_DOOR_TIME);
+      digitalWrite(DOOR_RELAY_PIN, LOW);
+      ESP_LOGI(TAG, "Door opened");
+      break;
+    }
+    case Command::LISTEN_ON: {
+      if (state == State::LISTEN) {
+        ESP_LOGW(TAG, "Setting state to LISTEN when already in LISTEN");
+      }
+      state = State::LISTEN;
+      break;
+    }
+    case Command::LISTEN_STOP:
+    case Command::RESET: {
+      if (state == State::IDLE) {
+        ESP_LOGW(TAG, "Setting state to IDLE when already in IDLE");
+      }
+      state = State::IDLE;
+      break;
+    }
+    }
+  }
+
   switch (state) {
   case State::IDLE: {
     /// Reset everything to base state
@@ -114,7 +235,8 @@ void loop() {
 
     // Doorbell
     audioMonitorCopier.copy();
-    if (volumeMeter.volume() > DOORBELL_TRIGGER_VOLUME && millis() - last_trigger_time > DOORBELL_REPEAT_TIME) {
+    if (volumeMeter.volume() > DOORBELL_TRIGGER_VOLUME &&
+        millis() - last_trigger_time > DOORBELL_REPEAT_TIME) {
       last_trigger_time = millis();
       Serial.println("Doorbell triggered!");
       // TODO: send TCP message to bridge about doorbell
@@ -127,23 +249,11 @@ void loop() {
     digitalWrite(LISTEN_RELAY_PIN, LOW);
     break;
   }
-  case State::OPEN_DOOR: {
-    Serial.println("Opening door...");
-    digitalWrite(DOOR_RELAY_PIN, HIGH);
-    delay(OPEN_DOOR_TIME);
-    digitalWrite(DOOR_RELAY_PIN, LOW);
-
-    Serial.println("Door opened, returning to idle.");
-    state = State::IDLE;
-    break;
-  }
   case State::LISTEN: {
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
-
     break;
   }
   }
-
   delay(10);
 }
