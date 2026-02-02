@@ -129,7 +129,7 @@ std::optional<Command> getCommand() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Initializing digital intercom...");
+  ESP_LOGI(TAG, "Initializing digital intercom...");
 
   // Idle - Radio
   pinMode(RADIO_RESET_PIN, OUTPUT);
@@ -141,10 +141,10 @@ void setup() {
   delay(100);
   bool radioInitialized = manager.init();
   if (!radioInitialized) {
-    Serial.println("Waiting for radio to initialize...");
+    ESP_LOGI(TAG, "Waiting for radio to initialize...");
     delay(1000);
   }
-  Serial.printf("Bridge IP: %s\n", STRING(BRIDGE_IP));
+  ESP_LOGI(TAG, "Bridge IP: %s\n", STRING(BRIDGE_IP));
 
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
@@ -153,7 +153,7 @@ void setup() {
   pinMode(DOOR_RELAY_PIN, OUTPUT);
   digitalWrite(DOOR_RELAY_PIN, LOW);
 
-  Serial.println("Setting up Audio Tools");
+  ESP_LOGI(TAG, "Setting up Audio Tools");
   // Listen
   pinMode(LISTEN_RELAY_PIN, OUTPUT);
   digitalWrite(LISTEN_RELAY_PIN, LOW);
@@ -174,10 +174,10 @@ void setup() {
   // Idle - doorbell
   volumeMeter.begin(analogInConfig);
 
-  Serial.println("Setting up TCP Server");
+  ESP_LOGI(TAG, "Setting up TCP Server");
   connectToTCPServer();
 
-  Serial.println("Digital intercom initialized.");
+  ESP_LOGI(TAG, "Digital intercom initialized.");
 }
 
 int last_trigger_time = 0;
@@ -218,7 +218,7 @@ void loop() {
     /// Reset everything to base state
     // Radio
     if (manager.available()) {
-      Serial.println("Radio message received.");
+      ESP_LOGI(TAG, "Radio message received.");
       uint8_t len = sizeof(msgBuf);
       uint8_t from;
 
@@ -238,7 +238,7 @@ void loop() {
     if (volumeMeter.volume() > DOORBELL_TRIGGER_VOLUME &&
         millis() - last_trigger_time > DOORBELL_REPEAT_TIME) {
       last_trigger_time = millis();
-      Serial.println("Doorbell triggered!");
+      ESP_LOGI(TAG, "Doorbell triggered!");
       // TODO: send TCP message to bridge about doorbell
     }
 
