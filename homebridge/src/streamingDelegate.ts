@@ -321,13 +321,13 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "+global_header",
       "-ar",
       "44100", //this.protectCamera.ufp.talkbackSettings.samplingRate.toString(),
-      "-b:a",
-      request.audio.max_bit_rate.toString() + "k",
+      // "-b:a",
+      // request.audio.max_bit_rate.toString() + "k",
       "-ac",
       "1", //this.protectCamera.ufp.talkbackSettings.channels.toString(),
       "-f",
-      "mp3",
-      "/tmp/output.mp3",
+      "s16le",
+      "udp://127.0.0.1:1234?pkt_size=1024",
     ];
 
     const ret2 = exec(
