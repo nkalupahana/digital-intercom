@@ -99,22 +99,17 @@ export class ExamplePlatformAccessory {
         },
       );
 
-    switchService = new this.hap.Service.StatelessProgrammableSwitch("Door");
+    switchService = new this.hap.Service.Switch("Door");
     this.accessory
       .addService(switchService)
-      .getCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent)
-      .onGet(this.handleProgrammableSwitchEventGet.bind(this));
-    // .onGet(() => {
-    //   this.log.info("Triggered GET On");
-
-    //   return 0;
-    // })
-    // .onSet((value) => {
-    //   this.log.info("Setting", value);
-    //   if (value) {
-    //     this.sendCommand(Command.OPEN_DOOR);
-    //   }
-    // });
+      .getCharacteristic(this.hap.Characteristic.On)
+      .onGet(() => 0)
+      .onSet((value) => {
+        this.log.info("Setting door", value);
+        if (value) {
+          this.sendCommand(Command.OPEN_DOOR);
+        }
+      });
 
     this.startServer();
 
@@ -123,15 +118,5 @@ export class ExamplePlatformAccessory {
     //   this.log.info("DING DONG");
     //   doorbellService.getCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent).setValue(this.hap.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS);
     // }, 5000);
-  }
-
-  handleProgrammableSwitchEventGet() {
-    this.log.debug("Triggered GET ProgrammableSwitchEvent");
-
-    // set this to a valid value for ProgrammableSwitchEvent
-    const currentValue =
-      this.hap.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS;
-
-    return currentValue;
   }
 }
