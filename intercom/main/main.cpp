@@ -1,4 +1,5 @@
 #include "../../../constants.h"
+#include "AudioTools/CoreAudio/AudioStreams.h"
 #include <Adafruit_TLV320DAC3100.h>
 #include <Arduino.h>
 #include <AudioTools.h>
@@ -15,6 +16,10 @@ RHReliableDatagram manager(driver, RADIO_INTERCOM_ADDRESS);
 uint8_t msgBuf[RH_RF69_MAX_MESSAGE_LEN];
 constexpr int RADIO_RESET_PIN = 16;
 
+// Idle - Doorbell
+constexpr float DOORBELL_TRIGGER_VOLUME = 1500;
+constexpr int DOORBELL_REPEAT_TIME = 5000;
+
 // Open door
 constexpr int DOOR_RELAY_PIN = 25;
 constexpr int OPEN_DOOR_TIME = 1000;
@@ -26,11 +31,13 @@ AnalogAudioStream audioInAnalog;
 UDPStream audioOutUdp(WIFI_SSID, WIFI_PASSWORD);
 VolumeStream volume((AudioOutput &)audioOutUdp);
 StreamCopy audioOutCopier(volume, audioInAnalog);
+VolumeMeter volumeMeter;
+StreamCopy audioMonitorCopier(volumeMeter, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
 
 enum class State { IDLE, OPEN_DOOR, LISTEN };
 
-State state = State::LISTEN;
+State state = State::IDLE;
 
 void setup() {
   Serial.begin(115200);
@@ -61,7 +68,7 @@ void setup() {
   // Listen
   pinMode(LISTEN_RELAY_PIN, OUTPUT);
   digitalWrite(LISTEN_RELAY_PIN, LOW);
-  AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Error);
+  AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Warning);
   audioOutUdp.begin(UDP_TARGET_IP,
                     atoi(UDP_TARGET_PORT)); // TODO: do not atoi
 
@@ -76,8 +83,13 @@ void setup() {
   analogInConfig.channels = 1;
   audioInAnalog.begin(analogInConfig);
 
+  // Idle - doorbell
+  volumeMeter.begin(analogInConfig);
+
   Serial.println("Digital intercom initialized.");
 }
+
+int last_trigger_time = 0;
 
 void loop() {
   switch (state) {
@@ -100,13 +112,20 @@ void loop() {
       }
     }
 
+    // Doorbell
+    audioMonitorCopier.copy();
+    if (volumeMeter.volume() > DOORBELL_TRIGGER_VOLUME && millis() - last_trigger_time > DOORBELL_REPEAT_TIME) {
+      last_trigger_time = millis();
+      Serial.println("Doorbell triggered!");
+      // TODO: send TCP message to bridge about doorbell
+    }
+
     // Open door
     digitalWrite(DOOR_RELAY_PIN, LOW);
 
     // Listen
     digitalWrite(LISTEN_RELAY_PIN, LOW);
     break;
-    // TODO: Listen for tone in
   }
   case State::OPEN_DOOR: {
     Serial.println("Opening door...");
@@ -122,8 +141,9 @@ void loop() {
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
 
-    delay(10);
     break;
   }
   }
+
+  delay(10);
 }
