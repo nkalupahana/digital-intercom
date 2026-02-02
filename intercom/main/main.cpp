@@ -372,6 +372,7 @@ void loop() {
   case State::TALK: {
     digitalWrite(TALK_RELAY_PIN, HIGH);
     // TODO: send real audio to DAC
+    // TODO: need to edit to I2S_NUM_1 in ESP_I2S.cpp to get this to work
     if (count % halfWavelength == 0) {
       sample = -1 * sample;
     }
