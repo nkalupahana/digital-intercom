@@ -18,10 +18,12 @@
 
 #define STR(str) #str
 #define STRING(str) STR(str)
+#define HANG() while (true) { delay(100); }
 
 constexpr const char *TAG = "intercom";
 
 // Idle - Radio
+constexpr int RADIO_IRQ_PIN = 26;
 RH_RF69 driver(SS, 26);
 RHReliableDatagram manager(driver, RADIO_INTERCOM_ADDRESS);
 uint8_t msgBuf[RH_RF69_MAX_MESSAGE_LEN];
@@ -46,10 +48,20 @@ VolumeMeter volumeMeter;
 StreamCopy audioMonitorCopier(volumeMeter, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
 
+// Talk
+Adafruit_TLV320DAC3100 dac;
+I2SClass dac_i2s;
+constexpr int DAC_BCLK_PIN = 14;
+constexpr int DAC_WS_PIN = 15;
+constexpr int DAC_DOUT_PIN = 27;
+constexpr int DAC_RESET_PIN = 17;
+constexpr int DAC_SAMPLE_RATE = 44100;
+constexpr int TALK_RELAY_PIN = 32;
+
 // TCP Server
 int tcpSocket = -1;
 
-enum class State { IDLE, LISTEN };
+enum class State { IDLE, LISTEN, TALK };
 enum class Command {
   OPEN_DOOR = 'D',
   LISTEN_ON = 'L',
@@ -174,6 +186,101 @@ void setup() {
   // Idle - doorbell
   volumeMeter.begin(analogInConfig);
 
+  // Talk
+  pinMode(TALK_RELAY_PIN, OUTPUT);
+  digitalWrite(TALK_RELAY_PIN, LOW);
+
+  pinMode(DAC_RESET_PIN, OUTPUT);
+  digitalWrite(DAC_RESET_PIN, LOW);
+  delay(100);
+  digitalWrite(DAC_RESET_PIN, HIGH);
+  delay(100);
+  bool dacInitialized = dac.begin();
+  if (!dacInitialized) {
+    ESP_LOGI(TAG, "Waiting for DAC to initialize...");
+    delay(1000);
+  }
+  dac.reset();
+  if (!dac.setCodecInterface(TLV320DAC3100_FORMAT_I2S, TLV320DAC3100_DATA_LEN_16)) {
+    ESP_LOGE(TAG, "Failed to configure codec interface!");
+    HANG();
+  }
+
+  if (!dac.setCodecClockInput(TLV320DAC3100_CODEC_CLKIN_PLL) ||
+      !dac.setPLLClockInput(TLV320DAC3100_PLL_CLKIN_BCLK)) {
+    ESP_LOGE(TAG, "Failed to configure codec clocks!");
+    HANG();
+  }
+
+  if (!dac.setPLLValues(1, 1, 8, 0)) {
+    ESP_LOGE(TAG, "Failed to configure PLL values!");
+    HANG();
+  }
+
+  if (!dac.setNDAC(true, 8) ||
+      !dac.setMDAC(true, 2) ||
+      !dac.setDOSR(128)) {
+    ESP_LOGE(TAG, "Failed to configure DAC dividers!");
+    HANG();
+  }
+
+  if (!dac.powerPLL(true)) {
+    Serial.println("Failed to power up PLL!");
+    HANG();
+  }
+
+  if (!dac.setDACDataPath(true, true, 
+    TLV320_DAC_PATH_NORMAL,
+    TLV320_DAC_PATH_NORMAL,
+    TLV320_VOLUME_STEP_1SAMPLE)) {
+    ESP_LOGE(TAG, "Failed to configure DAC data path!");
+    HANG();
+  }
+
+  if (!dac.configureAnalogInputs(TLV320_DAC_ROUTE_MIXER, // Left DAC to mixer
+    TLV320_DAC_ROUTE_MIXER, // Right DAC to mixer
+    false, false, false,    // No AIN routing
+    false)) {               // No HPL->HPR
+    Serial.println("Failed to configure DAC routing!");
+  }
+
+  if (!dac.setDACVolumeControl(
+    false, false, TLV320_VOL_INDEPENDENT) || // Unmute both channels TODO: only unmute one channel
+    !dac.setChannelVolume(false, 0) ||        // Left DAC +0dB TODO figure out the correct volume
+    !dac.setChannelVolume(true, 0)) {         // Right DAC +0dB
+    ESP_LOGE(TAG, "Failed to configure DAC volume control!");
+    HANG();
+  }
+
+  if (!dac.configureHeadphoneDriver(
+    true, true,                     // Power up both drivers
+    TLV320_HP_COMMON_1_35V,         // Default common mode
+    false) ||                       // Don't power down on SCD
+    !dac.configureHPL_PGA(0, true) || // Set HPL gain, unmute
+    !dac.configureHPR_PGA(0, true) || // Set HPR gain, unmute
+    !dac.setHPLVolume(true, 6) ||     // Enable and set HPL volume
+    !dac.setHPRVolume(true, 6)) {     // Enable and set HPR volume
+    ESP_LOGE(TAG, "Failed to configure headphone outputs!");
+    HANG();
+  }
+
+  if (!dac.setChannelVolume(false, -40) ||
+  !dac.setChannelVolume(true, -40)) {
+    ESP_LOGE(TAG, "Failed to set DAC channel volumes!");
+    HANG();
+  }
+
+  if (!dac.enableSpeaker(false)
+  ) {
+    ESP_LOGE(TAG, "Failed to disable speaker!");
+    HANG();
+  }
+
+  dac_i2s.setPins(DAC_BCLK_PIN, DAC_WS_PIN, DAC_DOUT_PIN);
+  if (!dac_i2s.begin(I2S_MODE_STD, DAC_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO)) {
+    ESP_LOGE(TAG, "Failed to initialize I2S!");
+  }
+
   ESP_LOGI(TAG, "Setting up TCP Server");
   connectToTCPServer();
 
@@ -181,6 +288,11 @@ void setup() {
 }
 
 int last_trigger_time = 0;
+const int amplitude = 5000;
+const int frequency = 440;
+const int halfWavelength = (DAC_SAMPLE_RATE / frequency);
+int16_t sample = amplitude; // current sample value
+int count = 0;
 
 void loop() {
   std::optional<Command> cmd = getCommand();
@@ -247,11 +359,26 @@ void loop() {
 
     // Listen
     digitalWrite(LISTEN_RELAY_PIN, LOW);
+
+    // Talk
+    digitalWrite(TALK_RELAY_PIN, LOW);
     break;
   }
   case State::LISTEN: {
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
+    break;
+  }
+  case State::TALK: {
+    digitalWrite(TALK_RELAY_PIN, HIGH);
+    // TODO: send real audio to DAC
+    if (count % halfWavelength == 0) {
+      sample = -1 * sample;
+    }
+  
+    // TODO: does not work with delay(10), comment that out if you're testing
+    dac_i2s.write(sample);
+    count++;
     break;
   }
   }
