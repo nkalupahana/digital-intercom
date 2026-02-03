@@ -3,14 +3,12 @@
 #include "tcpClient.h"
 #include "util.h"
 
-#include "AudioTools/CoreAudio/AudioStreams.h"
-#include <Adafruit_TLV320DAC3100.h>
 #include <Arduino.h>
 #include <AudioTools.h>
 #include <AudioTools/Communication/UDPStream.h>
 #include <AudioTools/CoreAudio/AudioOutput.h>
+#include <AudioTools/CoreAudio/AudioStreams.h>
 #include <AudioTools/CoreAudio/AudioTypes.h>
-#include <ESP_I2S.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
 
