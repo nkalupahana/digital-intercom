@@ -152,6 +152,13 @@ void loop() {
           Serial.print(msgBuf[i], HEX);
         }
         Serial.println();
+
+        if (len != CREDIT_CARD_DATA_LEN) {
+          ESP_LOGE(TAG, "Received invalid credit card data. Not sending");
+        } else {
+          sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN>{
+              msgBuf, CREDIT_CARD_DATA_LEN});
+        }
       }
     }
 
@@ -161,7 +168,7 @@ void loop() {
         millis() - last_trigger_time > DOORBELL_REPEAT_TIME) {
       last_trigger_time = millis();
       ESP_LOGI(TAG, "Doorbell triggered!");
-      // TODO: send TCP message to bridge about doorbell
+      sendBuzzerEvent();
     }
 
     // Open door

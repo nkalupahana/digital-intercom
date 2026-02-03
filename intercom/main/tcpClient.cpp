@@ -77,3 +77,13 @@ std::optional<Command> getCommand() {
     return Command::RESET;
   }
 }
+
+void sendBuzzerEvent() {
+  char value = (char)OutputEvent::BUZZER;
+  write(tcpSocket, &value, 1);
+}
+void sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN> buffer) {
+  char value = (char)OutputEvent::CREDIT_CARD;
+  write(tcpSocket, &value, 1);
+  write(tcpSocket, buffer.data(), buffer.size());
+}
