@@ -1,15 +1,12 @@
 import {
-  Characteristic,
   CharacteristicEventTypes,
   CharacteristicGetCallback,
-  CharacteristicValue,
   Logging,
   type HAP,
   type PlatformAccessory,
 } from "homebridge";
 import type { ExampleHomebridgePlatform } from "./platform.js";
 import { IntercomStreamingDelegate } from "./streamingDelegate.js";
-import { acquireService } from "homebridge-plugin-utils";
 import net from "net";
 
 enum Command {

@@ -4,6 +4,7 @@ import {
   PrepareStreamResponse,
   SRTPCryptoSuites,
   StartStreamRequest,
+  StopStreamRequest,
   StreamRequestTypes,
   type CameraController,
   type CameraControllerOptions,
@@ -18,7 +19,7 @@ import {
 } from "homebridge";
 import { ExamplePlatformAccessory } from "./platformAccessory.js";
 import getPort from "get-port";
-import { exec } from "node:child_process";
+import { ChildProcess, exec } from "node:child_process";
 import {
   FfmpegCodecs,
   FfmpegOptions,
@@ -28,6 +29,8 @@ import {
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
+const pathToFfmpeg = "/Users/nisala/.nix-profile/bin/ffmpeg";
+const ONE_SECOND = 1000;
 
 type SessionInfo = {
   address: string; // Address of the HAP controller.
@@ -50,10 +53,19 @@ type SessionInfo = {
   rtpDemuxer: RtpDemuxer;
 };
 
+interface ActiveSession {
+  sessionID: string;
+  startTime: number;
+  ffmpegProcess: ChildProcess;
+  returnFfmpegProcess: ChildProcess;
+  microphoneMuted: boolean | null;
+}
+
 export class IntercomStreamingDelegate implements CameraStreamingDelegate {
   private accessory: ExamplePlatformAccessory;
   private hap: HAP;
   private pendingSessions: Record<string, SessionInfo> = {};
+  private activeSession: ActiveSession | null = null;
   private readonly rtpPorts = new RtpPortAllocator();
   private ffmpegOptions = new FfmpegOptions({
     codecSupport: new FfmpegCodecs({ log: console }),
@@ -117,20 +129,34 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     };
 
     this.controller = new this.hap.CameraController(options);
+
+    this.controller.on("microphone-change", () => {
+      if (this.activeSession === null) {
+        console.error("No session currently active");
+      } else if (this.activeSession.microphoneMuted === null) {
+        this.activeSession.microphoneMuted = true;
+      } else {
+        this.activeSession.microphoneMuted = !this.activeSession.microphoneMuted;
+      }
+
+      console.log("Microphone muted", this.activeSession?.microphoneMuted);
+
+      this.controller.setMicrophoneMuted(true);
+    });    
   }
 
   handleSnapshotRequest(
     request: SnapshotRequest,
     callback: SnapshotRequestCallback,
   ): void {
-    console.log(request);
-    throw new Error("Method not implemented.");
+    console.log("Received snapshot request", request);
+    callback();
   }
   async prepareStream(
     request: PrepareStreamRequest,
     callback: PrepareStreamCallback,
   ): Promise<void> {
-    console.log(request);
+    console.log("Prepare stream request", request);
     const videoReturnPort = await getPort();
     const videoSSRC = this.hap.CameraController.generateSynchronisationSource();
     const audioSSRC = this.hap.CameraController.generateSynchronisationSource();
@@ -219,6 +245,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
         srtp_salt: request.audio.srtp_salt,
       },
     };
+    console.log("Prepared stream response", response);
 
     callback(undefined, response);
   }
@@ -226,28 +253,60 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     request: StreamingRequest,
     callback: StreamRequestCallback,
   ): void {
-    console.log(request);
     const sessionInfo = this.pendingSessions[request.sessionID];
-    console.log("Found sessionInfo", sessionInfo);
-
+    
     switch (request.type) {
-      case StreamRequestTypes.START:
-        this.startStream(request, sessionInfo, callback);
-        break;
-      case StreamRequestTypes.STOP:
-        callback(undefined);
-        break;
-      default:
-        callback();
+    case StreamRequestTypes.START:
+      this.startStream(request, sessionInfo, callback);
+      break;
+    case StreamRequestTypes.STOP:
+      this.stopStream(request, callback);
+      break;
+    default:
+      console.error("Unknown stream request type", request.type);
+      callback(undefined);
     }
   }
 
-  private startStream(
+  private async startStream(
     request: StartStreamRequest,
     sessionInfo: SessionInfo,
     callback: StreamRequestCallback,
-  ): void {
-    const shell = process.platform == "win32" ? "powershell" : undefined;
+  ): Promise<void> {
+    if (this.activeSession !== null) {
+      // TODO: it would be better to actually check the stream status,
+      // e.g. if it is transmitting data, and if not, kill it.
+      if (this.activeSession.startTime + (ONE_SECOND * 120) < Date.now()) {
+        console.log("Stream already active, killing old session");
+        this.stopStream({ sessionID: this.activeSession.sessionID, type: StreamRequestTypes.STOP }, callback);
+      } else {
+        const stopped = await new Promise(resolve => {
+          (async () => {
+            for (let i = 0; i < 30; i++) {
+              await new Promise(innerResolve => setTimeout(innerResolve, ONE_SECOND));
+              if (!this.activeSession) {
+                resolve(true);
+              }
+
+              if (this.activeSession && this.activeSession.startTime + (ONE_SECOND * 120) < Date.now()) {
+                this.stopStream({ sessionID: this.activeSession.sessionID, type: StreamRequestTypes.STOP }, callback);
+                resolve(true);
+              }
+            }
+            resolve(false);
+          })();
+        });
+        
+        if (!stopped) {
+          console.error("Stream already active, not starting new stream");
+          callback(new Error("Stream already active"));
+          return;
+        }
+      }
+    }
+
+    console.log("Starting stream", request);
+    const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
     const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
 
@@ -274,9 +333,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     // 4. FINAL ASSEMBLY
     // const debugFlag = this.platform.debugMode ? ' -loglevel debug' : '';
     const fcmd = `${videoInput} ${audioInput}${ffmpegVideoArgs}${ffmpegVideoStream}${ffmpegAudioFull}`;
-    console.log("ffmpeg", fcmd);
-    const ret = exec(
-      `C:/Users/akash/Downloads/ffmpeg/ffmpeg.exe ${fcmd}`,
+    const ffmpegProcess = exec(
+      `${pathToFfmpeg} ${fcmd}`,
       { shell },
       // (error, stdout, stderr) => {
       //   console.log("error", error);
@@ -284,7 +342,6 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       //   console.log("stderr", stderr);
       // },
     );
-    console.log("created process", ret.pid);
 
     const sdpIpVersion = sessionInfo.addressVersion === "ipv6" ? "IP6" : "IP4";
 
@@ -340,9 +397,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "udp://127.0.0.1:1234?pkt_size=1024",
     ];
 
-    // console.log("ffmpeg", ffmpegReturnAudioCmd.join(" "));
-    const ret2 = exec(
-      `C:/Users/akash/Downloads/ffmpeg/ffmpeg.exe ${ffmpegReturnAudioCmd.join(" ")}`,
+    const returnFfmpegProcess = exec(
+      `${pathToFfmpeg} ${ffmpegReturnAudioCmd.join(" ")}`,
       { shell },
       // (error, stdout, stderr) => {
       //   console.log("error", error);
@@ -350,15 +406,38 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       //   console.log("stderr", stderr);
       // },
     );
-    console.log("created return process", ret2.pid);
-    ret2.stdin?.end(sdpReturnAudio + "\n");
+    returnFfmpegProcess.stdin?.end(sdpReturnAudio + "\n");
 
-    // setTimeout(() => {
-    //   console.log("process still running?", ret2.killed);
-    //   console.log("killing return process");
-    //   ret2.kill();
-    // }, 5000);
+    this.activeSession = {
+      sessionID: request.sessionID,
+      startTime: Date.now(),
+      ffmpegProcess,
+      returnFfmpegProcess,
+      microphoneMuted: null,
+    };
 
+    this.controller.setMicrophoneMuted(true);
+    callback(undefined);
+  }
+
+  private stopStream(
+    request: StopStreamRequest,
+    callback: StreamRequestCallback,
+  ): void {
+    console.log("Stopping stream", request);
+    if (this.activeSession === null) {
+      console.error("No session currently active");
+      callback();
+      return;
+    }
+
+    if (this.activeSession.sessionID !== request.sessionID) {
+      console.warn("Session ID mismatch", this.activeSession.sessionID, request.sessionID);
+    }
+
+    this.activeSession.ffmpegProcess.kill();
+    this.activeSession.returnFfmpegProcess.kill();
+    this.activeSession = null;
     callback(undefined);
   }
 }
