@@ -154,7 +154,7 @@ void loop() {
         Serial.println();
 
         if (len != CREDIT_CARD_DATA_LEN) {
-          ESP_LOGE(TAG, "Received invalid credit card data. Not sending");
+          ESP_LOGE(TAG, "Received invalid credit card data (actual length: %d). Not sending", len);
         } else {
           sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN>{
               msgBuf, CREDIT_CARD_DATA_LEN});

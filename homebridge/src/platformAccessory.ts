@@ -9,18 +9,7 @@ import {
 import type { ExampleHomebridgePlatform } from "./platform.js";
 import { IntercomStreamingDelegate } from "./streamingDelegate.js";
 import net from "net";
-
-// These should be kept in sync with the C++ code
-enum Command {
-  OPEN_DOOR = "D",
-  LISTEN_ON = "L",
-  LISTEN_STOP = "S",
-}
-enum IntercomEventType {
-  BUZZER = "B",
-  CREDIT_CARD = "C",
-}
-const CREDIT_CARD_DATA_LEN = 8;
+import { Command, CREDIT_CARD_DATA_LEN, IntercomEventType } from "./commands.js";
 
 export class ExamplePlatformAccessory {
   hap: HAP;
@@ -52,12 +41,13 @@ export class ExamplePlatformAccessory {
       }
       return data.subarray(1);
     } else if (eventType === IntercomEventType.CREDIT_CARD) {
+      console.log("Got credit card event", data);
       const end = CREDIT_CARD_DATA_LEN + 1;
       if (data.length < end) {
         return null;
       }
-      const creditCardData = data.subarray(1, CREDIT_CARD_DATA_LEN);
-      console.log("Got credit card data", creditCardData);
+      const creditCardData = data.subarray(1, end);
+      console.log("Got credit card data", creditCardData.toString("hex"));
       return data.subarray(end);
     } else {
       console.log("Invalid eventType", eventType, data);
@@ -67,6 +57,11 @@ export class ExamplePlatformAccessory {
 
   startServer() {
     const server = net.createServer((socket) => {
+      if (this.socket !== null) {
+        this.log.warn("Client already connected, destroying old connection");
+        this.socket.destroy();
+      }
+
       this.socket = socket;
       this.log.info(
         "Client connected:",
@@ -79,7 +74,7 @@ export class ExamplePlatformAccessory {
         buffer = Buffer.concat([buffer, data]);
         while (true) {
           const newBuffer = this.onIntercomData(buffer);
-          if (newBuffer === null) {
+          if (newBuffer === null || newBuffer.length === 0) {
             break;
           }
           buffer = newBuffer;
@@ -97,7 +92,7 @@ export class ExamplePlatformAccessory {
       });
     });
 
-    server.maxConnections = 1;
+    server.maxConnections = 2;
     server.listen(9998, "0.0.0.0", () => {
       this.log.info(`TCP server listening on 0.0.0.0:9998`);
     });

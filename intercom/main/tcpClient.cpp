@@ -37,6 +37,8 @@ void connectToTCPServer() {
     }
     ESP_LOGE(TAG, "Unable to connect to %s:%d: %s", STRING(BRIDGE_IP), TCP_PORT,
              strerror(errno));
+    close(tcpSocket);
+    delay(1000);
   }
   ESP_LOGI(TAG, "Successfully connected to %s:%d", STRING(BRIDGE_IP), TCP_PORT);
 }

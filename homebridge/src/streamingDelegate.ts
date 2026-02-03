@@ -26,6 +26,7 @@ import {
   RtpDemuxer,
   RtpPortAllocator,
 } from "homebridge-plugin-utils";
+import { Command } from "./commands.js";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
@@ -59,6 +60,7 @@ interface ActiveSession {
   ffmpegProcess: ChildProcess;
   returnFfmpegProcess: ChildProcess;
   microphoneMuted: boolean | null;
+  rtpDemuxer: RtpDemuxer;
 }
 
 export class IntercomStreamingDelegate implements CameraStreamingDelegate {
@@ -306,6 +308,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     }
 
     console.log("Starting stream", request);
+    this.accessory.sendCommand(Command.LISTEN_ON);
     const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
     const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
@@ -313,8 +316,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
     const audioInput =
-      // `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -ac 1 -f u16le -ar 32000 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`
-      `-f lavfi -i "sine=frequency=1000:sample_rate=16000"`;
+      `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -ac 1 -f u16le -ar 32000 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`;
+      // `-f lavfi -i "sine=frequency=1000:sample_rate=16000"`;
     // 2. VIDEO ARGUMENTS
     const ffmpegVideoArgs = ` -map 0:0 -vcodec libx264 -pix_fmt yuvj420p -r ${request.video.fps} -f rawvideo -probesize 32 -analyzeduration 0 -fflags nobuffer -preset veryfast -refs 1 -x264-params intra-refresh=1:bframes=0 -b:v ${request.video.max_bit_rate}k -bufsize ${2 * request.video.max_bit_rate}k -maxrate ${request.video.max_bit_rate}k -payload_type ${request.video.pt}`;
 
@@ -414,6 +417,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       ffmpegProcess,
       returnFfmpegProcess,
       microphoneMuted: null,
+      rtpDemuxer: sessionInfo.rtpDemuxer,
     };
 
     this.controller.setMicrophoneMuted(true);
@@ -425,6 +429,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: StreamRequestCallback,
   ): void {
     console.log("Stopping stream", request);
+    this.accessory.sendCommand(Command.LISTEN_STOP);
     if (this.activeSession === null) {
       console.error("No session currently active");
       callback();
@@ -437,6 +442,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     this.activeSession.ffmpegProcess.kill();
     this.activeSession.returnFfmpegProcess.kill();
+    this.activeSession.rtpDemuxer.close();
     this.activeSession = null;
 
     // TODO: set intercom back to idle
