@@ -6,7 +6,10 @@
 #include <AudioTools.h>
 #include <ESP_I2S.h>
 
-void setupTalk(Adafruit_TLV320DAC3100 dac, I2SClass dac_i2s) {
+Adafruit_TLV320DAC3100 dac;
+I2SClass dac_i2s;
+
+void setupTalk() {
   pinMode(TALK_RELAY_PIN, OUTPUT);
   digitalWrite(TALK_RELAY_PIN, LOW);
 

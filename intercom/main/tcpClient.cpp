@@ -10,7 +10,7 @@
 
 int tcpSocket = -1;
 
-void connectToServer() {
+void connectToTCPServer() {
   if (tcpSocket > 0) {
     ESP_LOGI(TAG, "Closing existing TCP socket");
     close(tcpSocket);

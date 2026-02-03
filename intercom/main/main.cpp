@@ -40,12 +40,7 @@ VolumeMeter volumeMeter;
 StreamCopy audioMonitorCopier(volumeMeter, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
 
-// Talk
-Adafruit_TLV320DAC3100 dac;
-I2SClass dac_i2s;
-
 enum class State { IDLE, LISTEN, TALK };
-
 State state = State::IDLE;
 
 void setup() {
@@ -195,8 +190,8 @@ void loop() {
     }
 
     // TODO: does not work with delay(10), comment that out if you're testing
-    dac_i2s.write(sample);
-    count++;
+    // dac_i2s.write(sample);
+    // count++;
     break;
   }
   }
