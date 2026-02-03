@@ -31,3 +31,6 @@ jobs:
           esp_idf_version: v5.5.2
           target: esp32
           path: "intercom"
+      - name: Print sdkconfig on failure
+        if: failure()
+        run: cat intercom/sdkconfig
