@@ -296,7 +296,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
             resolve(false);
           })();
         });
-        
+
         if (!stopped) {
           console.error("Stream already active, not starting new stream");
           callback(new Error("Stream already active"));
@@ -438,6 +438,10 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     this.activeSession.ffmpegProcess.kill();
     this.activeSession.returnFfmpegProcess.kill();
     this.activeSession = null;
+
+    // TODO: set intercom back to idle
     callback(undefined);
   }
 }
+
+// TODO: setInterval to check if the stream is still active, and if not, stop it and clean up
