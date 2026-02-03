@@ -247,13 +247,15 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     sessionInfo: SessionInfo,
     callback: StreamRequestCallback,
   ): void {
+    const shell = process.platform == "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
     const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
-    const audioInput = `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -f u16le -ar 32000 -ac 1 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`;
-
+    const audioInput =
+      // `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -ac 1 -f u16le -ar 32000 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`
+      `-f lavfi -i "sine=frequency=1000:sample_rate=16000"`;
     // 2. VIDEO ARGUMENTS
     const ffmpegVideoArgs = ` -map 0:0 -vcodec libx264 -pix_fmt yuvj420p -r ${request.video.fps} -f rawvideo -probesize 32 -analyzeduration 0 -fflags nobuffer -preset veryfast -refs 1 -x264-params intra-refresh=1:bframes=0 -b:v ${request.video.max_bit_rate}k -bufsize ${2 * request.video.max_bit_rate}k -maxrate ${request.video.max_bit_rate}k -payload_type ${request.video.pt}`;
 
@@ -273,7 +275,15 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     // const debugFlag = this.platform.debugMode ? ' -loglevel debug' : '';
     const fcmd = `${videoInput} ${audioInput}${ffmpegVideoArgs}${ffmpegVideoStream}${ffmpegAudioFull}`;
     console.log("ffmpeg", fcmd);
-    const ret = exec(`C:/Users/akash/Downloads/ffmpeg/ffmpeg ${fcmd}`);
+    const ret = exec(
+      `C:/Users/akash/Downloads/ffmpeg/ffmpeg.exe ${fcmd}`,
+      { shell },
+      // (error, stdout, stderr) => {
+      //   console.log("error", error);
+      //   console.log("stdout", stdout);
+      //   console.log("stderr", stderr);
+      // },
+    );
     console.log("created process", ret.pid);
 
     const sdpIpVersion = sessionInfo.addressVersion === "ipv6" ? "IP6" : "IP4";
@@ -330,22 +340,24 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "udp://127.0.0.1:1234?pkt_size=1024",
     ];
 
+    // console.log("ffmpeg", ffmpegReturnAudioCmd.join(" "));
     const ret2 = exec(
-      `C:/Users/akash/Downloads/ffmpeg/ffmpeg ${ffmpegReturnAudioCmd.join(" ")}`,
-      (error, stdout, stderr) => {
-        console.log("error", error);
-        console.log("stdout", stdout);
-        console.log("stderr", stderr);
-      },
+      `C:/Users/akash/Downloads/ffmpeg/ffmpeg.exe ${ffmpegReturnAudioCmd.join(" ")}`,
+      { shell },
+      // (error, stdout, stderr) => {
+      //   console.log("error", error);
+      //   console.log("stdout", stdout);
+      //   console.log("stderr", stderr);
+      // },
     );
     console.log("created return process", ret2.pid);
     ret2.stdin?.end(sdpReturnAudio + "\n");
 
-    setTimeout(() => {
-      console.log("process still running?", ret2.killed);
-      console.log("killing return process");
-      ret2.kill();
-    }, 5000);
+    // setTimeout(() => {
+    //   console.log("process still running?", ret2.killed);
+    //   console.log("killing return process");
+    //   ret2.kill();
+    // }, 5000);
 
     callback(undefined);
   }
