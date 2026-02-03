@@ -27,6 +27,7 @@ import {
   RtpPortAllocator,
 } from "homebridge-plugin-utils";
 import { Command } from "./constants.js";
+import sharp from "sharp";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
@@ -152,7 +153,9 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: SnapshotRequestCallback,
   ): void {
     console.log("Received snapshot request", request);
-    callback();
+    sharp("assets/snapshot.png").resize(request.width, request.height, { fit: "cover" }).toBuffer().then((buffer) => {
+      callback(undefined, buffer);
+    });
   }
   async prepareStream(
     request: PrepareStreamRequest,

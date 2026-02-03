@@ -54,17 +54,18 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-    const uuid = this.api.hap.uuid.generate("digital-intercom");
+    const accessoryName = "Intercom";
+    const uuid = this.api.hap.uuid.generate(accessoryName);
     const existingAccessory = this.accessories.get(uuid);
     if (existingAccessory) {
       this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
       new DigitalIntercomPlatformAccessory(this, existingAccessory);
     } else {
       // the accessory does not yet exist, so we need to create it
-      this.log.info('Adding new accessory:', "digital-intercom");
+      this.log.info('Adding new accessory:', accessoryName);
 
       // create a new accessory
-      const accessory = new this.api.platformAccessory("digital-intercom", uuid);
+      const accessory = new this.api.platformAccessory(accessoryName, uuid);
       new DigitalIntercomPlatformAccessory(this, accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     }

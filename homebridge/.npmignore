@@ -134,3 +134,6 @@ web_modules/
 .pnp.*
 
 test/
+
+# source assets
+*.af
