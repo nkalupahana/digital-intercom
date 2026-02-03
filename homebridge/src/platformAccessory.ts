@@ -6,12 +6,12 @@ import {
   type HAP,
   type PlatformAccessory,
 } from "homebridge";
-import type { ExampleHomebridgePlatform } from "./platform.js";
+import type { DigitalIntercomPlatform } from "./platform.js";
 import { IntercomStreamingDelegate } from "./streamingDelegate.js";
 import net from "net";
-import { Command, CREDIT_CARD_DATA_LEN, IntercomEventType } from "./commands.js";
+import { Command, CREDIT_CARD_DATA_LEN, IntercomEventType } from "./constants.js";
 
-export class ExamplePlatformAccessory {
+export class DigitalIntercomPlatformAccessory {
   hap: HAP;
   private log: Logging;
   private accessory: PlatformAccessory;
@@ -99,7 +99,7 @@ export class ExamplePlatformAccessory {
   }
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: DigitalIntercomPlatform,
     private readonly paccessory: PlatformAccessory,
   ) {
     this.log = this.platform.log;

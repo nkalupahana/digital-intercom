@@ -1,19 +1,19 @@
 {
-  "name": "homebridge-plugin-name",
-  "displayName": "Plugin Name",
+  "name": "homebridge-digital-intercom",
+  "displayName": "Digital Intercom",
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "description": "A short description about what your plugin does.",
-  "author": "Your Name",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
+  "description": "Homebridge plugin that integrates with the Digital Intercom system",
+  "author": "Nisala Kalupahana",
+  "license": "AGPL-3.0",
+  "homepage": "https://github.com/nkalupahana/digital-intercom#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/nkalupahana/digital-intercom.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/nkalupahana/digital-intercom/issues"
   },
   "keywords": [
     "homebridge-plugin"

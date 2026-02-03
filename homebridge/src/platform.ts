@@ -1,17 +1,8 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
 
-import { ExamplePlatformAccessory } from './platformAccessory.js';
+import { DigitalIntercomPlatformAccessory } from './platformAccessory.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-
-// This is only required when using Custom Services and Characteristics not support by HomeKit
-import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
-
-/**
- * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
- */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
@@ -32,10 +23,6 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
   ) {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
-
-    // This is only required when using Custom Services and Characteristics not support by HomeKit
-    this.CustomServices = new EveHomeKitTypes(this.api).Services;
-    this.CustomCharacteristics = new EveHomeKitTypes(this.api).Characteristics;
 
     this.log.debug('Finished initializing platform:', this.config.name);
 
@@ -67,18 +54,18 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-    const uuid = this.api.hap.uuid.generate("akash");
+    const uuid = this.api.hap.uuid.generate("digital-intercom");
     const existingAccessory = this.accessories.get(uuid);
     if (existingAccessory) {
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-        new ExamplePlatformAccessory(this, existingAccessory);
+      this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+      new DigitalIntercomPlatformAccessory(this, existingAccessory);
     } else {
       // the accessory does not yet exist, so we need to create it
-      this.log.info('Adding new accessory:', "akash");
+      this.log.info('Adding new accessory:', "digital-intercom");
 
       // create a new accessory
-      const accessory = new this.api.platformAccessory("akash", uuid);
-      new ExamplePlatformAccessory(this, accessory);
+      const accessory = new this.api.platformAccessory("digital-intercom", uuid);
+      new DigitalIntercomPlatformAccessory(this, accessory);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     }
   }

@@ -17,7 +17,7 @@ import {
   type StreamingRequest,
   type StreamRequestCallback,
 } from "homebridge";
-import { ExamplePlatformAccessory } from "./platformAccessory.js";
+import { DigitalIntercomPlatformAccessory } from "./platformAccessory.js";
 import getPort from "get-port";
 import { ChildProcess, exec } from "node:child_process";
 import {
@@ -26,7 +26,7 @@ import {
   RtpDemuxer,
   RtpPortAllocator,
 } from "homebridge-plugin-utils";
-import { Command } from "./commands.js";
+import { Command } from "./constants.js";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
@@ -64,7 +64,7 @@ interface ActiveSession {
 }
 
 export class IntercomStreamingDelegate implements CameraStreamingDelegate {
-  private accessory: ExamplePlatformAccessory;
+  private accessory: DigitalIntercomPlatformAccessory;
   private hap: HAP;
   private pendingSessions: Record<string, SessionInfo> = {};
   private activeSession: ActiveSession | null = null;
@@ -78,7 +78,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
   });
   controller: CameraController;
 
-  constructor(paccessory: ExamplePlatformAccessory) {
+  constructor(paccessory: DigitalIntercomPlatformAccessory) {
     this.accessory = paccessory;
     this.hap = paccessory.hap;
 
