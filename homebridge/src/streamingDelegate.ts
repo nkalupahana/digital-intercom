@@ -28,10 +28,10 @@ import {
 } from "homebridge-plugin-utils";
 import { Command } from "./constants.js";
 import sharp from "sharp";
+import pathToFfmpeg from "ffmpeg-for-homebridge";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
-const pathToFfmpeg = "/Users/nisala/.nix-profile/bin/ffmpeg";
 const ONE_SECOND = 1000;
 
 type SessionInfo = {

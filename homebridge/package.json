@@ -30,6 +30,7 @@
     "watch": "npm run build && npm link && nodemon"
   },
   "dependencies": {
+    "ffmpeg-for-homebridge": "^2.2.1",
     "get-port": "^7.1.0",
     "homebridge-lib": "^7.1.12",
     "homebridge-plugin-utils": "^1.30.0",
