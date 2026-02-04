@@ -139,7 +139,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       } else if (this.activeSession.microphoneMuted === null) {
         this.activeSession.microphoneMuted = true;
       } else {
-        this.activeSession.microphoneMuted = !this.activeSession.microphoneMuted;
+        this.activeSession.microphoneMuted =
+          !this.activeSession.microphoneMuted;
       }
 
       console.log("Microphone muted", this.activeSession?.microphoneMuted);
@@ -150,7 +151,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       }
 
       this.controller.setMicrophoneMuted(true);
-    });    
+    });
   }
 
   handleSnapshotRequest(
@@ -158,9 +159,12 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: SnapshotRequestCallback,
   ): void {
     console.log("Received snapshot request", request);
-    sharp("assets/snapshot.png").resize(request.width, request.height, { fit: "cover" }).toBuffer().then((buffer) => {
-      callback(undefined, buffer);
-    });
+    sharp("assets/snapshot.png")
+      .resize(request.width, request.height, { fit: "cover" })
+      .toBuffer()
+      .then((buffer) => {
+        callback(undefined, buffer);
+      });
   }
   async prepareStream(
     request: PrepareStreamRequest,
@@ -264,17 +268,17 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: StreamRequestCallback,
   ): void {
     const sessionInfo = this.pendingSessions[request.sessionID];
-    
+
     switch (request.type) {
-    case StreamRequestTypes.START:
-      this.startStream(request, sessionInfo, callback);
-      break;
-    case StreamRequestTypes.STOP:
-      this.stopStream(request, callback);
-      break;
-    default:
-      console.error("Unknown stream request type", request.type);
-      callback(undefined);
+      case StreamRequestTypes.START:
+        this.startStream(request, sessionInfo, callback);
+        break;
+      case StreamRequestTypes.STOP:
+        this.stopStream(request, callback);
+        break;
+      default:
+        console.error("Unknown stream request type", request.type);
+        callback(undefined);
     }
   }
 
@@ -286,20 +290,37 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     if (this.activeSession !== null) {
       // TODO: it would be better to actually check the stream status,
       // e.g. if it is transmitting data, and if not, kill it.
-      if (this.activeSession.startTime + (ONE_SECOND * 120) < Date.now()) {
+      if (this.activeSession.startTime + ONE_SECOND * 120 < Date.now()) {
         console.log("Stream already active, killing old session");
-        this.stopStream({ sessionID: this.activeSession.sessionID, type: StreamRequestTypes.STOP }, callback);
+        this.stopStream(
+          {
+            sessionID: this.activeSession.sessionID,
+            type: StreamRequestTypes.STOP,
+          },
+          callback,
+        );
       } else {
-        const stopped = await new Promise(resolve => {
+        const stopped = await new Promise((resolve) => {
           (async () => {
             for (let i = 0; i < 30; i++) {
-              await new Promise(innerResolve => setTimeout(innerResolve, ONE_SECOND));
+              await new Promise((innerResolve) =>
+                setTimeout(innerResolve, ONE_SECOND),
+              );
               if (!this.activeSession) {
                 resolve(true);
               }
 
-              if (this.activeSession && this.activeSession.startTime + (ONE_SECOND * 120) < Date.now()) {
-                this.stopStream({ sessionID: this.activeSession.sessionID, type: StreamRequestTypes.STOP }, callback);
+              if (
+                this.activeSession &&
+                this.activeSession.startTime + ONE_SECOND * 120 < Date.now()
+              ) {
+                this.stopStream(
+                  {
+                    sessionID: this.activeSession.sessionID,
+                    type: StreamRequestTypes.STOP,
+                  },
+                  callback,
+                );
                 resolve(true);
               }
             }
@@ -319,13 +340,15 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     this.accessory.sendCommand(Command.LISTEN_ON);
     const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
-    const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
+    const videoInput = `-re -loop 1 -i assets/snapshot.png -r ${request.video.fps}`;
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
     const audioInput =
-      `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 -ac 1 -f u16le -ar 32000 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`;
+      `-fflags nobuffer -flags low_delay -analyzeduration 0 -probesize 32 ` +
       // `-f lavfi -i "sine=frequency=1000:sample_rate=16000"`;
+      `-ac 1 -f u16le -ar 32000 -i "udp://0.0.0.0:9999?pkt_size=1024&fifo_size=1000000&overrun_nonfatal=0"`;
+
     // 2. VIDEO ARGUMENTS
     const ffmpegVideoArgs = ` -map 0:0 -vcodec libx264 -pix_fmt yuvj420p -r ${request.video.fps} -f rawvideo -probesize 32 -analyzeduration 0 -fflags nobuffer -preset veryfast -refs 1 -x264-params intra-refresh=1:bframes=0 -b:v ${request.video.max_bit_rate}k -bufsize ${2 * request.video.max_bit_rate}k -maxrate ${request.video.max_bit_rate}k -payload_type ${request.video.pt}`;
 
@@ -448,7 +471,11 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     }
 
     if (this.activeSession.sessionID !== request.sessionID) {
-      console.warn("Session ID mismatch", this.activeSession.sessionID, request.sessionID);
+      console.warn(
+        "Session ID mismatch",
+        this.activeSession.sessionID,
+        request.sessionID,
+      );
     }
 
     this.activeSession.ffmpegProcess.kill();
