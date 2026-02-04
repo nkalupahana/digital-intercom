@@ -24,6 +24,13 @@ export class DigitalIntercomPlatformAccessory {
   private socket: net.Socket | null = null;
   private doorbellService: Service | null = null;
 
+  getSocketAddress() {
+    if (this.socket === null) {
+      return null;
+    }
+    return this.socket.remoteAddress ?? null;
+  }
+
   sendCommand(cmd: Command) {
     if (this.socket === null) {
       this.log.error("Cannot send command because no TCP client connected");

@@ -5,14 +5,17 @@
 #include <Arduino.h>
 #include <AudioTools.h>
 #include <ESP_I2S.h>
+#include <WiFiUdp.h>
 
 Adafruit_TLV320DAC3100 dac;
 I2SClass dac_i2s;
 
-void setupTalk() {
+void setupTalk(WiFiUDP& talkUdp) {
+  // Relay
   pinMode(TALK_RELAY_PIN, OUTPUT);
   digitalWrite(TALK_RELAY_PIN, LOW);
 
+  // DAC
   pinMode(DAC_RESET_PIN, OUTPUT);
   digitalWrite(DAC_RESET_PIN, LOW);
   delay(100);
@@ -68,8 +71,8 @@ void setupTalk() {
           false, false, TLV320_VOL_INDEPENDENT) || // Unmute both channels TODO:
                                                    // only unmute one channel
       !dac.setChannelVolume(
-          false, 0) || // Left DAC +0dB TODO figure out the correct volume
-      !dac.setChannelVolume(true, 0)) { // Right DAC +0dB
+          false, 18) || // Left DAC +0dB TODO figure out the correct volume
+      !dac.setChannelVolume(true, 18)) { // Right DAC +0dB
     ESP_LOGE(TAG, "Failed to configure DAC volume control!");
     errorHang();
   }
@@ -86,7 +89,7 @@ void setupTalk() {
     errorHang();
   }
 
-  if (!dac.setChannelVolume(false, -40) || !dac.setChannelVolume(true, -40)) {
+  if (!dac.setChannelVolume(false, -20) || !dac.setChannelVolume(true, -20)) {
     ESP_LOGE(TAG, "Failed to set DAC channel volumes!");
     errorHang();
   }
@@ -101,4 +104,15 @@ void setupTalk() {
                      I2S_SLOT_MODE_MONO)) {
     ESP_LOGE(TAG, "Failed to initialize I2S!");
   }
+
+  // UDP
+  int udpResult = talkUdp.begin(AUDIO_IN_PORT);
+  if (udpResult != 1) {
+    ESP_LOGE(TAG, "Failed to start UDP server on port %d", AUDIO_IN_PORT);
+    errorHang();
+  }
+}
+
+void writeAudioSamples(uint8_t* audioBuffer, size_t packetSize) {
+  dac_i2s.write(audioBuffer, packetSize);
 }

@@ -143,6 +143,11 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       }
 
       console.log("Microphone muted", this.activeSession?.microphoneMuted);
+      if (this.activeSession?.microphoneMuted) {
+        this.accessory.sendCommand(Command.LISTEN_ON);
+      } else {
+        this.accessory.sendCommand(Command.TALK_ON);
+      }
 
       this.controller.setMicrophoneMuted(true);
     });    
@@ -351,6 +356,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     const sdpIpVersion = sessionInfo.addressVersion === "ipv6" ? "IP6" : "IP4";
 
+    console.log("Return sample rate", request.audio.sample_rate);
     const sdpReturnAudio = [
       "v=0",
       "o=- 0 0 IN " + sdpIpVersion + " 127.0.0.1",
@@ -393,15 +399,17 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "-flags",
       "+global_header",
       "-ar",
-      "44100", //this.protectCamera.ufp.talkbackSettings.samplingRate.toString(),
+      "16000", //this.protectCamera.ufp.talkbackSettings.samplingRate.toString(),
       // "-b:a",
       // request.audio.max_bit_rate.toString() + "k",
       "-ac",
       "1", //this.protectCamera.ufp.talkbackSettings.channels.toString(),
       "-f",
       "s16le",
-      "udp://127.0.0.1:1234?pkt_size=1024",
+      `udp://${this.accessory.getSocketAddress()}:9997?pkt_size=1024`,
     ];
+
+    // TODO: handle no socket address
 
     const returnFfmpegProcess = exec(
       `${pathToFfmpeg} ${ffmpegReturnAudioCmd.join(" ")}`,

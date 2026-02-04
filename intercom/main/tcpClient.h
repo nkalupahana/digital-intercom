@@ -9,6 +9,7 @@
 enum class Command {
   OPEN_DOOR = 'D',
   LISTEN_ON = 'L',
+  TALK_ON = 'T',
   LISTEN_STOP = 'S',
   HEARTBEAT = 'H',
   RESET = 'R', // Internal only command. Not sent by the TCP server

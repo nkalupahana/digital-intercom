@@ -1,4 +1,5 @@
 #include "../../../constants.h"
+#include "WiFiUdp.h"
 #include "talk.h"
 #include "tcpClient.h"
 #include "util.h"
@@ -11,6 +12,7 @@
 #include <AudioTools/CoreAudio/AudioTypes.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
+#include <cstdint>
 
 // Idle - Radio
 constexpr int RADIO_IRQ_PIN = 26;
@@ -37,6 +39,11 @@ StreamCopy audioOutCopier(volume, audioInAnalog);
 VolumeMeter volumeMeter;
 StreamCopy audioMonitorCopier(volumeMeter, audioInAnalog);
 constexpr int LISTEN_RELAY_PIN = 33;
+
+// Talk
+WiFiUDP talkUdp;
+uint8_t rawAudioBuffer[1024];
+// DAC variables are set up in talk.cpp
 
 enum class State { IDLE, LISTEN, TALK };
 State state = State::IDLE;
@@ -89,7 +96,7 @@ void setup() {
   volumeMeter.begin(analogInConfig);
 
   // Talk
-  setupTalk();
+  setupTalk(talkUdp);
 
   ESP_LOGI(TAG, "Setting up TCP Server");
   connectToTCPServer();
@@ -103,6 +110,8 @@ const int frequency = 440;
 const int halfWavelength = (DAC_SAMPLE_RATE / frequency);
 int16_t sample = amplitude; // current sample value
 int count = 0;
+
+uint64_t numPackets = 0;
 
 void loop() {
   std::optional<Command> cmd = getCommand();
@@ -124,6 +133,13 @@ void loop() {
         ESP_LOGW(TAG, "Setting state to LISTEN when already in LISTEN");
       }
       state = State::LISTEN;
+      break;
+    }
+    case Command::TALK_ON: {
+      if (state == State::TALK) {
+        ESP_LOGW(TAG, "Setting state to TALK when already in TALK");
+      }
+      state = State::TALK;
       break;
     }
     case Command::LISTEN_STOP:
@@ -184,17 +200,31 @@ void loop() {
     break;
   }
   case State::LISTEN: {
+    digitalWrite(TALK_RELAY_PIN, LOW);
     digitalWrite(LISTEN_RELAY_PIN, HIGH);
     audioOutCopier.copy();
     break;
   }
   case State::TALK: {
+    digitalWrite(LISTEN_RELAY_PIN, LOW);
     digitalWrite(TALK_RELAY_PIN, HIGH);
+
+    int packetSize = talkUdp.parsePacket();
+    if (packetSize > 0) {
+      numPackets += packetSize;
+      talkUdp.read(rawAudioBuffer, packetSize);
+      writeAudioSamples(rawAudioBuffer, packetSize);
+    } else {
+      Serial.println("No packet to process!");
+    }
+
+    Serial.printf("Num bytes received: %llu\n", numPackets);
+
     // TODO: send real audio to DAC
     // TODO: need to edit to I2S_NUM_1 in ESP_I2S.cpp to get this to work
-    if (count % halfWavelength == 0) {
-      sample = -1 * sample;
-    }
+    // if (count % halfWavelength == 0) {
+    //   sample = -1 * sample;
+    // }
 
     // TODO: does not work with delay(10), comment that out if you're testing
     // dac_i2s.write(sample);
@@ -202,5 +232,8 @@ void loop() {
     break;
   }
   }
-  delay(10);
+
+  if (state != State::LISTEN) {
+    delay(10);
+  }
 }

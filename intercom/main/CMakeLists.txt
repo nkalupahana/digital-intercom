@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.cpp" "talk.cpp" "tcpClient.cpp"
+    SRCS "talk.cpp" "main.cpp" "tcpClient.cpp"
     INCLUDE_DIRS ""
 )
 
