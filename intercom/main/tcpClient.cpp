@@ -73,6 +73,8 @@ std::optional<Command> getCommand() {
     return Command::LISTEN_STOP;
   case (char)Command::TALK_ON:
     return Command::TALK_ON;
+  case (char)Command::HEARTBEAT:
+    return Command::HEARTBEAT;
   default:
     ESP_LOGE(TAG,
              "Got unexpected command. Going to disconnect and reconnect: %c",
