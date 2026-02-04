@@ -109,6 +109,8 @@ void loop() {
   if (cmd) {
     ESP_LOGI(TAG, "Got command: %c\n", *cmd);
     switch (*cmd) {
+    case Command::HEARTBEAT:
+      break;
     case Command::OPEN_DOOR: {
       ESP_LOGI(TAG, "Opening door...");
       digitalWrite(DOOR_RELAY_PIN, HIGH);

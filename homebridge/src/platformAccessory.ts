@@ -9,7 +9,12 @@ import {
 import type { DigitalIntercomPlatform } from "./platform.js";
 import { IntercomStreamingDelegate } from "./streamingDelegate.js";
 import net from "net";
-import { Command, CREDIT_CARD_DATA_LEN, IntercomEventType } from "./constants.js";
+import {
+  Command,
+  CREDIT_CARD_DATA_LEN,
+  HEARTBEAT_INTERVAL,
+  IntercomEventType,
+} from "./constants.js";
 
 export class DigitalIntercomPlatformAccessory {
   hap: HAP;
@@ -96,6 +101,9 @@ export class DigitalIntercomPlatformAccessory {
     server.listen(9998, "0.0.0.0", () => {
       this.log.info(`TCP server listening on 0.0.0.0:9998`);
     });
+    setInterval(() => {
+      this.socket?.write(Command.HEARTBEAT);
+    }, HEARTBEAT_INTERVAL);
   }
 
   constructor(
