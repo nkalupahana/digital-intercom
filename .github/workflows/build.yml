@@ -6,7 +6,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: "recursive"
       - name: esp-idf build
@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: "recursive"
       - name: Copy .env file
@@ -31,6 +31,20 @@ jobs:
           esp_idf_version: v5.5.2
           target: esp32
           path: "intercom"
-      - name: Print sdkconfig on failure
-        if: failure()
-        run: cat intercom/sdkconfig
+  homebridge-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: homebridge/package-lock.json
+      - run: npm ci
+        working-directory: homebridge
+      - run: npm run build
+        working-directory: homebridge
+          
