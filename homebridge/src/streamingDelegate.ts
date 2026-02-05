@@ -340,8 +340,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     this.accessory.sendCommand(Command.LISTEN_ON);
     const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
-    // const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
-    const videoInput = `-re -f lavfi -i "movie=assets/snapshot.png:loop=0,setpts=N/(${request.video.fps}*TB)"`;
+    // const videoInput = `-f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
+    const videoInput = `-f lavfi -i "movie=assets/snapshot.png:loop=0,setpts=N/(${request.video.fps}*TB)"`;
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
