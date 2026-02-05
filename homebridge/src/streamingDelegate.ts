@@ -270,15 +270,15 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     const sessionInfo = this.pendingSessions[request.sessionID];
 
     switch (request.type) {
-      case StreamRequestTypes.START:
-        this.startStream(request, sessionInfo, callback);
-        break;
-      case StreamRequestTypes.STOP:
-        this.stopStream(request, callback);
-        break;
-      default:
-        console.error("Unknown stream request type", request.type);
-        callback(undefined);
+    case StreamRequestTypes.START:
+      this.startStream(request, sessionInfo, callback);
+      break;
+    case StreamRequestTypes.STOP:
+      this.stopStream(request, callback);
+      break;
+    default:
+      console.error("Unknown stream request type", request.type);
+      callback(undefined);
     }
   }
 
@@ -340,7 +340,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     this.accessory.sendCommand(Command.LISTEN_ON);
     const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
-    const videoInput = `-re -loop 1 -i assets/snapshot.png -r ${request.video.fps}`;
+    // const videoInput = `-re -f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
+    const videoInput = `-re -f lavfi -i "movie=assets/snapshot.png:loop=0,setpts=N/(${request.video.fps}*TB)"`;
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
