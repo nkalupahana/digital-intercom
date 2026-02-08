@@ -89,7 +89,9 @@ void sendBuzzerEvent() {
   write(tcpSocket, &value, 1);
 }
 void sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN> buffer) {
-  char value = (char)OutputEvent::CREDIT_CARD;
-  write(tcpSocket, &value, 1);
-  write(tcpSocket, buffer.data(), buffer.size());
+  std::vector<uint8_t> data;
+  data.reserve(1 + buffer.size());
+  data.push_back((char)OutputEvent::CREDIT_CARD);
+  data.insert(data.end(), buffer.begin(), buffer.end());
+  write(tcpSocket, data.data(), data.size());
 }

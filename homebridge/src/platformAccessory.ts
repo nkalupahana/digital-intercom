@@ -39,7 +39,7 @@ export class DigitalIntercomPlatformAccessory {
     this.socket.write(cmd);
   }
 
-  onIntercomData(data: Buffer<ArrayBuffer>) {
+  onIntercomData(data: Buffer<ArrayBuffer>): void {
     const eventType = String.fromCharCode(data[0]);
     if (eventType === IntercomEventType.BUZZER) {
       if (this.doorbellService) {
@@ -51,28 +51,29 @@ export class DigitalIntercomPlatformAccessory {
       } else {
         this.log.error("Unable ring doorbell because doorbellService is null");
       }
-      return data.subarray(1);
+      return;
     } else if (eventType === IntercomEventType.CREDIT_CARD) {
       console.log("Got credit card event", data);
-      const end = CREDIT_CARD_DATA_LEN + 1;
-      if (data.length < end) {
-        return null;
+      const messageLength = CREDIT_CARD_DATA_LEN + 1;
+      if (data.length !== messageLength) {
+        console.log("Invalid credit card data length", data.length, messageLength);
+        return;
       }
-      const creditCardData = data.subarray(1, end);
+      const creditCardData = data.subarray(1, messageLength);
       const hash = creditCardData.toString("hex");
       console.log("Got credit card data", hash);
       const allowedCard = this.platform.config.allowedCards.find((card) => card.hash === hash);
       if (!allowedCard) {
         console.log("Card not allowed", hash);
-        return null;
+        return;
       } else {
         console.log("Card allowed", hash, allowedCard.description);
         this.socket?.write(Command.OPEN_DOOR);
       }
-      return data.subarray(end);
+      return;
     } else {
       console.log("Invalid eventType", eventType, data);
-      return null;
+      return;
     }
   }
 
@@ -90,20 +91,8 @@ export class DigitalIntercomPlatformAccessory {
         socket.remotePort,
       );
 
-      let buffer = Buffer.from([]);
       socket.on("data", (data) => {
-        buffer = Buffer.concat([buffer, data]);
-        while (true) {
-          const newBuffer = this.onIntercomData(buffer);
-          if (newBuffer === null) {
-            break;
-          }
-          
-          buffer = newBuffer;
-          if (buffer.length === 0) {
-            break;
-          }
-        }
+        this.onIntercomData(data);
       });
 
       socket.on("close", () => {
