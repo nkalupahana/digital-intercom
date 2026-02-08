@@ -71,8 +71,8 @@ void setupTalk(WiFiUDP& talkUdp) {
           false, false, TLV320_VOL_INDEPENDENT) || // Unmute both channels TODO:
                                                    // only unmute one channel
       !dac.setChannelVolume(
-          false, 18) || // Left DAC +0dB TODO figure out the correct volume
-      !dac.setChannelVolume(true, 18)) { // Right DAC +0dB
+          false, 18) ||
+      !dac.setChannelVolume(true, 18)) {
     ESP_LOGE(TAG, "Failed to configure DAC volume control!");
     errorHang();
   }

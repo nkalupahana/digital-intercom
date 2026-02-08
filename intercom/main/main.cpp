@@ -219,16 +219,6 @@ void loop() {
     }
 
     Serial.printf("Num bytes received: %llu\n", numPackets);
-
-    // TODO: send real audio to DAC
-    // TODO: need to edit to I2S_NUM_1 in ESP_I2S.cpp to get this to work
-    // if (count % halfWavelength == 0) {
-    //   sample = -1 * sample;
-    // }
-
-    // TODO: does not work with delay(10), comment that out if you're testing
-    // dac_i2s.write(sample);
-    // count++;
     break;
   }
   }

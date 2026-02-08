@@ -12,6 +12,5 @@ export enum IntercomEventType {
   CREDIT_CARD = "C",
 }
 
-export const CREDIT_CARD_DATA_LEN = 19;
-
+export const CREDIT_CARD_DATA_LEN = 34;
 export const HEARTBEAT_INTERVAL = 1000;
