@@ -2,6 +2,14 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 
 import { DigitalIntercomPlatformAccessory } from './platformAccessory.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+
+interface DigitalIntercomPlatformConfig extends PlatformConfig {
+  allowedCards: {
+    hash: string;
+    description: string;
+  }[];
+}
+
 export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
@@ -15,16 +23,16 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
   public readonly CustomServices: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly CustomCharacteristics: any;
+  public readonly config: DigitalIntercomPlatformConfig;
 
   constructor(
     public readonly log: Logging,
-    public readonly config: PlatformConfig,
+    public readonly _config: DigitalIntercomPlatformConfig,
     public readonly api: API,
   ) {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
-
-    this.log.debug('Finished initializing platform:', this.config.name);
+    this.config = _config;
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,

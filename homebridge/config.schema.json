@@ -5,13 +5,25 @@
   "strictValidation": false,
   "schema": {
     "type": "object",
-    "required": ["name"],
+    "required": ["allowedCards"],
     "additionalProperties": false,
     "properties": {
-      "name": {
-        "title": "Name",
-        "type": "string",
-        "default": "Digital Intercom"
+      "allowedCards": {
+        "title": "Allowed Cards",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "hash": {
+              "title": "Card Number",
+              "type": "string"
+            },
+            "description": {
+              "title": "Description",
+              "type": "string"
+            }
+          }
+        }
       }
     }
   }

@@ -59,7 +59,16 @@ export class DigitalIntercomPlatformAccessory {
         return null;
       }
       const creditCardData = data.subarray(1, end);
-      console.log("Got credit card data", creditCardData.toString("hex"));
+      const hash = creditCardData.toString("hex");
+      console.log("Got credit card data", hash);
+      const allowedCard = this.platform.config.allowedCards.find((card) => card.hash === hash);
+      if (!allowedCard) {
+        console.log("Card not allowed", hash);
+        return null;
+      } else {
+        console.log("Card allowed", hash, allowedCard.description);
+        this.socket?.write(Command.OPEN_DOOR);
+      }
       return data.subarray(end);
     } else {
       console.log("Invalid eventType", eventType, data);
@@ -86,10 +95,14 @@ export class DigitalIntercomPlatformAccessory {
         buffer = Buffer.concat([buffer, data]);
         while (true) {
           const newBuffer = this.onIntercomData(buffer);
-          if (newBuffer === null || newBuffer.length === 0) {
+          if (newBuffer === null) {
             break;
           }
+          
           buffer = newBuffer;
+          if (buffer.length === 0) {
+            break;
+          }
         }
       });
 
@@ -104,7 +117,7 @@ export class DigitalIntercomPlatformAccessory {
       });
     });
 
-    server.maxConnections = 2;
+    server.maxConnections = 1;
     server.listen(9998, "0.0.0.0", () => {
       this.log.info(`TCP server listening on 0.0.0.0:9998`);
     });
