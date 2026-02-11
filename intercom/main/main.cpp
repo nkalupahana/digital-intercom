@@ -68,7 +68,17 @@ void setup() {
   ESP_LOGI(TAG, "Bridge IP: %s\n", STRING(BRIDGE_IP));
 
   driver.setTxPower(RADIO_POWER, true);
-  driver.setFrequency(RADIO_FREQUENCY);
+  bool radioFrequencySet = driver.setFrequency(RADIO_FREQUENCY);
+  if (!radioFrequencySet) {
+    ESP_LOGE(TAG, "Failed to set radio frequency");
+    errorHang();
+  }
+
+  bool radioModemConfigSet = driver.setModemConfig(RH_RF69::FSK_Rb2Fd5);
+  if (!radioModemConfigSet) {
+    ESP_LOGE(TAG, "Failed to set radio modem config");
+    errorHang();
+  }
 
   // Open door
   pinMode(DOOR_RELAY_PIN, OUTPUT);

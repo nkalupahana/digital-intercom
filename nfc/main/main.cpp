@@ -1,6 +1,5 @@
 // #define MIFAREDEBUG
 // #define PN532DEBUG
-#define RH_ESP32_USE_HSPI
 #include "errors.h"
 
 #include <PN532.h>
@@ -49,6 +48,11 @@ void setup() {
 
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
+  bool success = driver.setModemConfig(RH_RF69::FSK_Rb2Fd5);
+  if (!success) {
+    ESP_LOGE(TAG, "Failed to set modem config");
+    errorHang();
+  }
 
   ESP_LOGI(TAG, "Ready!");
 }
