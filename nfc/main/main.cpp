@@ -36,13 +36,13 @@ void setup() {
 
   bool nfcInitialized = NFC::setup();
   if (!nfcInitialized) {
-    Serial.println("Failed to initialize NFC");
+    ESP_LOGE(TAG, "Failed to initialize NFC");
     errorHang();
   }
 
   bool radioInitialized = manager.init();
   while (!radioInitialized) {
-    Serial.println("Waiting for radio to initialize...");
+    ESP_LOGI(TAG, "Waiting for radio to initialize...");
     radioInitialized = manager.init();
     delay(1000);
   }
@@ -50,7 +50,7 @@ void setup() {
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
 
-  Serial.println("Ready!");
+  ESP_LOGI(TAG, "Ready!");
 }
 
 enum class TapType { None, Pay, mID };
@@ -61,7 +61,7 @@ void loop() {
   bool foundCard = NFC::inListPassiveTarget();
 
   if (foundCard) {
-    Serial.println("\nFound something!");
+    ESP_LOGI(TAG, "\nFound something!");
     TapType tapType = determineTapType();
 
     switch (tapType) {
@@ -89,9 +89,9 @@ void loop() {
       bool success =
           manager.sendtoWait(output, hashBufferSize, RADIO_INTERCOM_ADDRESS);
       if (success) {
-        Serial.println("Data sent successfully");
+        ESP_LOGI(TAG, "Data sent successfully");
       } else {
-        Serial.println("Data send failed");
+        ESP_LOGE(TAG, "Data send failed");
       }
 
       delay(3000);
@@ -99,7 +99,7 @@ void loop() {
     case TapType::mID:
       break;
     case TapType::None:
-      Serial.println("Tap from unknown card type");
+      ESP_LOGE(TAG, "Tap from unknown card type");
       break;
     }
   } else {

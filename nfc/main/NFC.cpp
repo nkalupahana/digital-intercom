@@ -20,25 +20,22 @@ bool setup() {
 
   uint32_t versiondata = nfc.getFirmwareVersion();
   while (!versiondata) {
-    Serial.println("Waiting for PN532 to initialize...");
+    ESP_LOGI(TAG, "Waiting for PN532 to initialize...");
     versiondata = nfc.getFirmwareVersion();
     delay(1000);
   }
 
-  Serial.print("Found chip PN5");
-  Serial.println((versiondata >> 24) & 0xFF, HEX);
-  Serial.print("Firmware ver. ");
-  Serial.print((versiondata >> 16) & 0xFF, DEC);
-  Serial.print('.');
-  Serial.println((versiondata >> 8) & 0xFF, DEC);
+  ESP_LOGI(TAG, "Found chip PN5%02X", (versiondata >> 24) & 0xFF);
+  ESP_LOGI(TAG, "Firmware ver. %d.%d", (versiondata >> 16) & 0xFF,
+           (versiondata >> 8) & 0xFF);
 
   if (!nfc.SAMConfig()) {
-    Serial.println("Failed to configure SAM!");
+    ESP_LOGE(TAG, "Failed to configure SAM!");
     return false;
   }
 
   if (!nfc.setPassiveActivationRetries(0x00)) {
-    Serial.println("Failed to configure retries!");
+    ESP_LOGI(TAG, "Failed to configure retries!");
     return false;
   }
 

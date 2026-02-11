@@ -7,7 +7,6 @@
 #include <tlv.h>
 
 namespace Card {
-
 bool sendECPFrame();
 bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
                   WriteSlice &track2Slice);

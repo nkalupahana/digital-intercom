@@ -36,7 +36,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
   const uint8_t *aflValue = nullptr;
   size_t aflLen = 0;
   if (aflNode == nullptr) {
-    Serial.println("No AFL data found, checking tag 0x80");
+    ESP_LOGE(TAG, "No AFL data found, checking tag 0x80");
     aflNode = tlvs.findTLV(0x80);
     CHECK_PRINT_RETURN_BOOL("No AFL or Tag 0x80 data found",
                             aflNode != nullptr);
@@ -179,7 +179,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
   writeSlice.reset();
   if (pdolNode == nullptr) {
     tlvs.reset();
-    Serial.println("Failed to find PDOL. Using empty DOL");
+    ESP_LOGE(TAG, "Failed to find PDOL. Using empty DOL");
     CHECK_RETURN_OPT(
         writeSlice.appendApduCommand(0x80, 0xA8, 0x00, 0x00, {{0x83, 0x00}}));
   } else {
@@ -207,8 +207,8 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
 
   // FIX
   if (!tryCheckmark(tlvs, writeSlice, rbuf, track2Slice)) {
-    Serial.println("Failed to get checkmark, but might still have Track 2 "
-                   "Equivalent Data");
+    ESP_LOGE(TAG, "Failed to get checkmark, but might still have Track 2 "
+                  "Equivalent Data");
   }
 
   CHECK_PRINT_RETURN_OPT(
