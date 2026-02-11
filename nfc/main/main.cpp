@@ -8,6 +8,7 @@
 
 #include "../../../constants.h"
 #include "Card.h"
+#include "DigitalID.h"
 #include "NFC.h"
 #include "utils.h"
 #include <RHReliableDatagram.h>
@@ -65,6 +66,7 @@ void loop() {
     std::optional<ReadSlice> ppseOutputOpt = Card::checkIfValid();
 
     if (ppseOutputOpt) {
+      ESP_LOGI(TAG, "Card is valid");
       const std::optional<std::span<const uint8_t>> track2DataOpt =
           Card::getTrack2Data(*ppseOutputOpt);
       CHECK_RETURN(track2DataOpt);
@@ -94,9 +96,18 @@ void loop() {
       }
 
       delay(3000);
-    } else {
-      ESP_LOGE(TAG, "Tap from unknown card type");
+      return;
     }
+
+    bool digitalIDValid = DigitalID::checkIfValid();
+    if (digitalIDValid) {
+      ESP_LOGI(TAG, "Digital ID is valid");
+      delay(3000);
+      return;
+    }
+
+    ESP_LOGE(TAG, "Unknown card type");
+    delay(500);
   } else {
     bool success = Card::sendECPFrame();
     CHECK_PRINT_RETURN("Failed to send ECP frame", success);

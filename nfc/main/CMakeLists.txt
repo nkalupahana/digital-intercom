@@ -1,4 +1,4 @@
 idf_component_register(
-    SRCS "NFC.cpp" "Card.cpp" "Slice.cpp" "main.cpp"
+    SRCS "DigitalID.cpp" "NFC.cpp" "Card.cpp" "Slice.cpp" "main.cpp"
     INCLUDE_DIRS ""
 )

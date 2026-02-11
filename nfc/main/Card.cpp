@@ -13,7 +13,6 @@ constexpr size_t CDOL_BUFSIZ = 64;
 constexpr size_t AFL_BUFSIZE = 64;
 constexpr size_t TRACK2_TAG = 0x57;
 constexpr size_t TRACK2_TAG_BUFSIZ = 19;
-constexpr size_t PN532_PACKBUFFSIZ = 255;
 
 bool sendECPFrame() {
   // Set CIU_BitFraming register to send 8 bits
