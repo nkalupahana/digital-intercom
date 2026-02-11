@@ -102,6 +102,7 @@ void loop() {
     bool digitalIDValid = DigitalID::checkIfValid();
     if (digitalIDValid) {
       ESP_LOGI(TAG, "Digital ID is valid");
+      DigitalID::performHandoff();
       delay(3000);
       return;
     }
