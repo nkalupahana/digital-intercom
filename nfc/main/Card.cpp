@@ -7,6 +7,7 @@
 #include <span>
 #include <tlv.h>
 
+namespace Card {
 constexpr size_t RECORD_BUFSIZ = 300;
 constexpr size_t CDOL_BUFSIZ = 64;
 constexpr size_t AFL_BUFSIZE = 64;
@@ -18,11 +19,11 @@ bool sendECPFrame() {
   // Set CIU_BitFraming register to send 8 bits
   uint16_t addr = 0x633D;
   CHECK_PRINT_RETURN_BOOL("Failed to set CIU_BitFraming for ECP",
-                          nfcWriteRegister(addr, 0x00));
+                          NFC::writeRegister(addr, 0x00));
 
   // Send frame
-  exchangeDataICT({{0x6a, 0x02, 0xc8, 0x01, 0x00, 0x03, 0x00, 0x06, 0x7f, 0x01,
-                    0x00, 0x00, 0x00, 0x4d, 0xef}});
+  NFC::exchangeDataICT({{0x6a, 0x02, 0xc8, 0x01, 0x00, 0x03, 0x00, 0x06, 0x7f,
+                         0x01, 0x00, 0x00, 0x00, 0x4d, 0xef}});
   return true;
 }
 
@@ -54,7 +55,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
   tlvs.reset();
 
   // Figure out the last sent block number
-  readSliceOpt = exchangeDataICT("R(NACK): ", {{0xB2}}, rbuf);
+  readSliceOpt = NFC::exchangeDataICT("R(NACK): ", {{0xB2}}, rbuf);
   CHECK_RETURN_BOOL(readSliceOpt);
   readSlice = *readSliceOpt;
   uint8_t blockNum = ((readSlice.readByte() & 0xA0) != 0) ? 0x1 : 0x0;
@@ -79,7 +80,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
       blockNum ^= 1;
       uint8_t pcb = 0x2 | blockNum;
       uint8_t p2 = (sfi & 0xF8) | 0x4;
-      readSliceOpt = exchangeDataICT(
+      readSliceOpt = NFC::exchangeDataICT(
           "Read Record: ", {{pcb, 0x00, 0xB2, recordToRead, p2, 0x00}}, rbuf);
       while (true) {
         CHECK_RETURN_BOOL(readSliceOpt);
@@ -97,7 +98,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
         writeSlice.reset();
         blockNum ^= 1;
         pcb = 0xA2 | blockNum;
-        readSliceOpt = exchangeDataICT("R(ACK): ", {{pcb}}, rbuf);
+        readSliceOpt = NFC::exchangeDataICT("R(ACK): ", {{pcb}}, rbuf);
       }
       printHex("Full Read Record response: ", recordSlice.span());
       tlvs.decodeTLVs(recordbuf, recordSlice.len());
@@ -133,7 +134,8 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
       });
   CHECK_PRINT_RETURN_BOOL("Failed to build GENERATE AC command", builtAC);
 
-  readSliceOpt = exchangeData("Sending GENERATE AC: ", writeSlice.span(), rbuf);
+  readSliceOpt =
+      NFC::exchangeData("Sending GENERATE AC: ", writeSlice.span(), rbuf);
   CHECK_PRINT_RETURN_BOOL("Failed to do GENERATE AC", readSliceOpt);
 
   return true;
@@ -151,7 +153,8 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
   writeSlice.reset();
   CHECK_RETURN_OPT(
       writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, "2PAY.SYS.DDF01"));
-  readSliceOpt = exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
+  readSliceOpt =
+      NFC::exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
   CHECK_RETURN_OPT(readSliceOpt);
   readSlice = *readSliceOpt;
 
@@ -164,7 +167,8 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
 
   writeSlice.reset();
   CHECK_RETURN_OPT(writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, aid));
-  readSliceOpt = exchangeData("Sending SELECT AID: ", writeSlice.span(), rbuf);
+  readSliceOpt =
+      NFC::exchangeData("Sending SELECT AID: ", writeSlice.span(), rbuf);
   CHECK_RETURN_OPT(readSliceOpt);
   readSlice = *readSliceOpt;
 
@@ -188,7 +192,7 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
           });
         }));
   }
-  readSliceOpt = exchangeData("Sending GPO: ", writeSlice.span(), rbuf);
+  readSliceOpt = NFC::exchangeData("Sending GPO: ", writeSlice.span(), rbuf);
   CHECK_RETURN_OPT(readSliceOpt);
   readSlice = *readSliceOpt;
 
@@ -212,3 +216,4 @@ std::optional<std::span<const uint8_t>> getTrack2Data() {
       track2Slice.len());
   return track2Slice.span();
 }
+} // namespace Card

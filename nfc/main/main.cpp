@@ -34,7 +34,7 @@ void setup() {
   digitalWrite(RADIO_RESET_PIN, LOW);
   delay(100);
 
-  bool nfcInitialized = nfcSetup();
+  bool nfcInitialized = NFC::setup();
   if (!nfcInitialized) {
     Serial.println("Failed to initialize NFC");
     errorHang();
@@ -58,7 +58,7 @@ enum class TapType { None, Pay, mID };
 TapType determineTapType() { return TapType::None; }
 
 void loop() {
-  bool foundCard = nfcInListPassiveTarget();
+  bool foundCard = NFC::inListPassiveTarget();
 
   if (foundCard) {
     Serial.println("\nFound something!");
@@ -67,7 +67,7 @@ void loop() {
     switch (tapType) {
     case TapType::Pay: {
       const std::optional<std::span<const uint8_t>> track2DataOpt =
-          getTrack2Data();
+          Card::getTrack2Data();
       CHECK_RETURN(track2DataOpt);
       const std::span<const uint8_t> track2Data = *track2DataOpt;
       printHex("Track 2 Equivalent Data: ", track2Data);
@@ -103,7 +103,7 @@ void loop() {
       break;
     }
   } else {
-    bool success = sendECPFrame();
+    bool success = Card::sendECPFrame();
     CHECK_PRINT_RETURN("Failed to send ECP frame", success);
   }
 }

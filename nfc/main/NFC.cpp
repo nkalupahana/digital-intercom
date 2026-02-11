@@ -1,7 +1,7 @@
-#include "HardwareSerial.h"
 #include "Slice.h"
 #include "errors.h"
 #include "utils.h"
+#include <HardwareSerial.h>
 #include <PN532.h>
 #include <PN532_SPI.h>
 #include <SPI.h>
@@ -10,11 +10,12 @@
 #include <optional>
 #include <span>
 
+namespace NFC {
 constexpr size_t PN532_SS = 5;
 PN532_SPI pn532spi(SPI, PN532_SS);
 PN532 nfc(pn532spi);
 
-bool nfcSetup() {
+bool setup() {
   nfc.begin();
 
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -44,9 +45,9 @@ bool nfcSetup() {
   return true;
 }
 
-bool nfcInListPassiveTarget() { return nfc.inListPassiveTarget(); }
+bool inListPassiveTarget() { return nfc.inListPassiveTarget(); }
 
-bool nfcWriteRegister(uint16_t addr, uint8_t value) {
+bool writeRegister(uint16_t addr, uint8_t value) {
   return nfc.writeRegister(addr, value);
 }
 
@@ -92,3 +93,4 @@ bool exchangeDataICT(std::span<const uint8_t> toSend) {
 
   return false;
 }
+} // namespace NFC
