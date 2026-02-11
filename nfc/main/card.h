@@ -8,7 +8,9 @@
 
 namespace Card {
 bool sendECPFrame();
+std::optional<ReadSlice> checkIfValid();
 bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
                   WriteSlice &track2Slice);
-std::optional<std::span<const uint8_t>> getTrack2Data();
+std::optional<std::span<const uint8_t>>
+getTrack2Data(const ReadSlice &ppseOutput);
 } // namespace Card

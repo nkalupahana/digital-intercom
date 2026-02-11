@@ -53,21 +53,16 @@ void setup() {
   ESP_LOGI(TAG, "Ready!");
 }
 
-enum class TapType { None, Pay, mID };
-
-TapType determineTapType() { return TapType::None; }
-
 void loop() {
   bool foundCard = NFC::inListPassiveTarget();
 
   if (foundCard) {
-    ESP_LOGI(TAG, "\nFound something!");
-    TapType tapType = determineTapType();
+    ESP_LOGI(TAG, "Found something!");
+    std::optional<ReadSlice> ppseOutputOpt = Card::checkIfValid();
 
-    switch (tapType) {
-    case TapType::Pay: {
+    if (ppseOutputOpt) {
       const std::optional<std::span<const uint8_t>> track2DataOpt =
-          Card::getTrack2Data();
+          Card::getTrack2Data(*ppseOutputOpt);
       CHECK_RETURN(track2DataOpt);
       const std::span<const uint8_t> track2Data = *track2DataOpt;
       printHex("Track 2 Equivalent Data: ", track2Data);
@@ -95,12 +90,8 @@ void loop() {
       }
 
       delay(3000);
-    }
-    case TapType::mID:
-      break;
-    case TapType::None:
+    } else {
       ESP_LOGE(TAG, "Tap from unknown card type");
-      break;
     }
   } else {
     bool success = Card::sendECPFrame();

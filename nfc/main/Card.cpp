@@ -141,25 +141,26 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
   return true;
 }
 
-std::optional<std::span<const uint8_t>> getTrack2Data() {
-  std::optional<ReadSlice> readSliceOpt;
-  ReadSlice readSlice{nullptr, 0};
-  static TLVS tlvs;
-  static uint8_t rbuf[PN532_PACKBUFFSIZ];
-  static uint8_t sbuf[PN532_PACKBUFFSIZ];
-  WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
+uint8_t rbuf[PN532_PACKBUFFSIZ];
+uint8_t sbuf[PN532_PACKBUFFSIZ];
+WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 
+std::optional<ReadSlice> checkIfValid() {
   // SELECT PPSE
   writeSlice.reset();
   CHECK_RETURN_OPT(
       writeSlice.appendApduCommand(0x00, 0xA4, 0x04, 0x00, "2PAY.SYS.DDF01"));
-  readSliceOpt =
-      NFC::exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
-  readSlice = *readSliceOpt;
+  return NFC::exchangeData("Sending SELECT PPSE: ", writeSlice.span(), rbuf);
+}
+
+std::optional<std::span<const uint8_t>>
+getTrack2Data(const ReadSlice &ppseOutput) {
+  std::optional<ReadSlice> readSliceOpt;
+  ReadSlice readSlice{ppseOutput};
+  static TLVS tlvs;
 
   // SELECT AID
-  tlvs.decodeTLVs(rbuf, readSlice.len());
+  tlvs.decodeTLVs(readSlice.data(), readSlice.len());
   TLVNode *aidNode = tlvs.findTLV(0x4F);
   CHECK_PRINT_RETURN_OPT("Failed to get AID from card!", aidNode);
   std::span<const uint8_t> aid{aidNode->getValue(), aidNode->getValueLength()};
