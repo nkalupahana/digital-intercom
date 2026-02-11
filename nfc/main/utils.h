@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <span>
 
-void printHex(const char *pre, std::span<const uint8_t> data) {
+inline void printHex(const char *pre, std::span<const uint8_t> data) {
   Serial.print(pre);
   for (const uint8_t byte : data) {
     Serial.printf("%02X", byte);

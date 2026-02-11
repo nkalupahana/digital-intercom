@@ -8,8 +8,8 @@
 #include <tlv.h>
 
 #include "../../../constants.h"
-#include "card.h"
-#include "nfc.h"
+#include "Card.h"
+#include "NFC.h"
 #include "utils.h"
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
@@ -53,59 +53,54 @@ void setup() {
   Serial.println("Ready!");
 }
 
-enum class TapType {
-  None,
-  Pay,
-  mID
-};
+enum class TapType { None, Pay, mID };
 
-TapType determineTapType() {
-  return TapType::None;
-}
+TapType determineTapType() { return TapType::None; }
 
 void loop() {
-  bool foundCard = nfc.inListPassiveTarget();
+  bool foundCard = nfcInListPassiveTarget();
 
   if (foundCard) {
     Serial.println("\nFound something!");
     TapType tapType = determineTapType();
 
     switch (tapType) {
-      case TapType::Pay: {
-        const std::optional<std::span<const uint8_t>> track2DataOpt = getTrack2Data();
-        CHECK_RETURN(track2DataOpt);
-        const std::span<const uint8_t> track2Data = *track2DataOpt;
-        printHex("Track 2 Equivalent Data: ", track2Data);
-        CHECK_PRINT_RETURN("Track 2 Equivalent Data must be at least 8 bytes",
-                           track2Data.size() >= 8);
-      
-        // Hash
-        const int hashBufferSize =
-            34; // 32 bytes for hash, 2 bytes for last 4 of track 2 data
-        unsigned char output[hashBufferSize];
-        int ret = mbedtls_sha256(track2Data.data(), track2Data.size(), output, 0);
-        CHECK_PRINT_RETURN("Failed to hash data", ret == 0);
-      
-        // Add last 4 to the end
-        output[hashBufferSize - 2] = track2Data[6];
-        output[hashBufferSize - 1] = track2Data[7];
-      
-        // Send
-        bool success =
-            manager.sendtoWait(output, hashBufferSize, RADIO_INTERCOM_ADDRESS);
-        if (success) {
-          Serial.println("Data sent successfully");
-        } else {
-          Serial.println("Data send failed");
-        }
-      
-        delay(3000);
+    case TapType::Pay: {
+      const std::optional<std::span<const uint8_t>> track2DataOpt =
+          getTrack2Data();
+      CHECK_RETURN(track2DataOpt);
+      const std::span<const uint8_t> track2Data = *track2DataOpt;
+      printHex("Track 2 Equivalent Data: ", track2Data);
+      CHECK_PRINT_RETURN("Track 2 Equivalent Data must be at least 8 bytes",
+                         track2Data.size() >= 8);
+
+      // Hash
+      const int hashBufferSize =
+          34; // 32 bytes for hash, 2 bytes for last 4 of track 2 data
+      unsigned char output[hashBufferSize];
+      int ret = mbedtls_sha256(track2Data.data(), track2Data.size(), output, 0);
+      CHECK_PRINT_RETURN("Failed to hash data", ret == 0);
+
+      // Add last 4 to the end
+      output[hashBufferSize - 2] = track2Data[6];
+      output[hashBufferSize - 1] = track2Data[7];
+
+      // Send
+      bool success =
+          manager.sendtoWait(output, hashBufferSize, RADIO_INTERCOM_ADDRESS);
+      if (success) {
+        Serial.println("Data sent successfully");
+      } else {
+        Serial.println("Data send failed");
       }
-      case TapType::mID:
-        break;
-      case TapType::None:
-        Serial.println("Tap from unknown card type");
-        break;
+
+      delay(3000);
+    }
+    case TapType::mID:
+      break;
+    case TapType::None:
+      Serial.println("Tap from unknown card type");
+      break;
     }
   } else {
     bool success = sendECPFrame();
