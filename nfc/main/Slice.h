@@ -1,7 +1,7 @@
 #pragma once
 
 #include "errors.h"
-
+#include "utils.h"
 #include <HardwareSerial.h>
 #include <concepts>
 #include <cstdint>
@@ -64,7 +64,7 @@ public:
     // CLA + INS + P1 + P2 + Lc + Le
     size_t minSize = 6;
     if (len_ < minSize) {
-      Serial.printf("ERROR: Not enough space to write APDU command\n");
+      ESP_LOGE(TAG, "ERROR: Not enough space to write APDU command");
       return false;
     }
 
@@ -76,7 +76,7 @@ public:
     uint8_t *initialData = data_;
     CHECK_RETURN_BOOL(appendCommandF(*this));
     if (data_ - initialData > 0xFF) {
-      Serial.printf("ERROR: APDU command length exceeds 255 bytes\n");
+      ESP_LOGE(TAG, "ERROR: APDU command length exceeds 255 bytes");
       return false;
     }
     *lcPtr = data_ - initialData;

@@ -1,5 +1,6 @@
 #include "Slice.h"
 #include "errors.h"
+#include "utils.h"
 #include <HardwareSerial.h>
 #include <cstdint>
 #include <cstring>
@@ -191,7 +192,7 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
       // Also works: 37, 20, 40, 00
       CHECK_RETURN_BOOL(validateAndAppend({0x37, 0x20, 0x40, 0x00}));
       break;
-    case 0x9F6E: {// Third Party Data
+    case 0x9F6E: { // Third Party Data
       // AMEX: Enhances Contactless Reader Capabities
       CHECK_RETURN_BOOL(validateAndAppend({0xD8, 0xF0, 0xC0, 0x00}));
       break;
@@ -213,7 +214,7 @@ bool WriteSlice::appendFromDol(ReadSlice &dol) {
                                 // unknown result (maybe 02 = success)
       break;
     default:
-      Serial.printf("WARNING: Unknown DOL tag %04X, filling with zeros\n", tag);
+      ESP_LOGW(TAG, "WARNING: Unknown DOL tag %04X, filling with zeros", tag);
       CHECK_RETURN_BOOL(fill(0, requiredLen));
     }
   }

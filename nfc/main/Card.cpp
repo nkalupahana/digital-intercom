@@ -59,7 +59,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
   CHECK_RETURN_BOOL(readSliceOpt);
   readSlice = *readSliceOpt;
   uint8_t blockNum = ((readSlice.readByte() & 0xA0) != 0) ? 0x1 : 0x0;
-  Serial.printf("blockNum: %02x\n", blockNum);
+  ESP_LOGI(TAG, "blockNum: %02x", blockNum);
 
   static uint8_t cdolBuf[CDOL_BUFSIZ];
   static WriteSlice cdolSlice(cdolBuf, sizeof(cdolBuf));
@@ -72,7 +72,7 @@ bool tryCheckmark(TLVS &tlvs, WriteSlice &writeSlice, std::span<uint8_t> rbuf,
     // number of records included in data authentication
     uint8_t _ = aflSlice.readByte();
     for (; recordToRead <= endRecord; ++recordToRead) {
-      Serial.printf("Reading record %02x\n", recordToRead);
+      ESP_LOGI(TAG, "Reading record %02x", recordToRead);
       static uint8_t recordbuf[RECORD_BUFSIZ];
       WriteSlice recordSlice(recordbuf, RECORD_BUFSIZ);
 
