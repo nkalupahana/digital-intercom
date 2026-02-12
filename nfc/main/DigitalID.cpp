@@ -27,6 +27,8 @@ std::optional<ReadSlice> performHandoff() {
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
 
+  // All CC/NDEF ADPU commands are from the Type 4 Tag Operation Specification
+
   // SELECT CC
   writeSlice.reset();
   CHECK_RETURN_OPT(
@@ -48,6 +50,9 @@ std::optional<ReadSlice> performHandoff() {
   printHex("CC length: ", readSlice.span());
 
   // Assert byte 0 is 0x00, and length is 2
+  // In this case and future cases, it is possible that byte 0 is not 0x00.
+  // In that case, we would need to read with offset.
+  // But I haven't seen this in practice, so we'll just assert it.
   CHECK_PRINT_RETURN_OPT("CC length is not 2", readSlice.span().size() == 2);
   CHECK_PRINT_RETURN_OPT("CC length byte 0 is not 0x00",
                          readSlice.span()[0] == 0x00);
@@ -62,8 +67,9 @@ std::optional<ReadSlice> performHandoff() {
   readSlice = *readSliceOpt;
   printHex("CC data: ", readSlice.span());
 
-  // TODO: parse file out of CC data. for now, hardcoding 0xE104
-  // NDEF select file
+  // TODO: parse file out of CC data, there is TLV encoding in here. for now,
+  // hardcoding 0xE104 NDEF select file
+  // https://discord.com/channels/@me/783194785975369738/1445435281934123008
   writeSlice.reset();
   CHECK_RETURN_OPT(
       writeSlice.appendApduCommand(0x00, 0xA4, 0x00, 0x0C, {{0xE1, 0x04}}));
@@ -107,10 +113,9 @@ std::optional<ReadSlice> performHandoff() {
       readSlice.span(), std::string_view("urn:nfc:sn:handover"));
   CHECK_PRINT_RETURN_OPT("Handover data not found", handoverData.size() > 0);
 
-  // TODO: technically, we could have static handover here.
-  // We should test with Android to check in case it does static
-  // handover. If not, just keeping our implementation of negotiated
-  // handover works for me.
+  // Technically, we could have static handover here.
+  // However, both iOS and Android do negotiated handover
+  // for digital IDs, so we have no need to support static handover.
 
   // Select the handover service (Ts)
 
