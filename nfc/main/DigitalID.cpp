@@ -99,13 +99,13 @@ std::optional<ReadSlice> performHandoff() {
   readSlice = *readSliceOpt;
   printHex("Binary: ", readSlice.span());
 
-  //   auto serviceParameter = std::ranges::search(readSlice.span(), "Tp");
-  //   CHECK_PRINT_RETURN_OPT("Service parameter not found",
-  //                          serviceParameter.size() > 0);
-  //   auto handoverData =
-  //       std::ranges::search(readSlice.span(), "urn:nfc:sn:handover");
-  //   CHECK_PRINT_RETURN_OPT("Handover data not found", handoverData.size() >
-  //   0);
+  auto serviceParameter =
+      std::ranges::search(readSlice.span(), std::string_view("Tp"));
+  CHECK_PRINT_RETURN_OPT("Service parameter not found",
+                         serviceParameter.size() > 0);
+  auto handoverData = std::ranges::search(
+      readSlice.span(), std::string_view("urn:nfc:sn:handover"));
+  CHECK_PRINT_RETURN_OPT("Handover data not found", handoverData.size() > 0);
 
   // TODO: technically, we could have static handover here.
   // We should test with Android to check in case it does static
