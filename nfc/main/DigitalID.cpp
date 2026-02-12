@@ -88,7 +88,9 @@ std::optional<ReadSlice> performHandoff() {
                          readSlice.span()[0] == 0x00);
   uint8_t binaryLength = readSlice.span()[1] + 2;
 
-  // Read NDEF record. Should contain an NDEF record of type urn:nfc:wkt:Tp
+  // Read NDEF record. Should contain an NDEF record of type Tp (service
+  // parameter) with data including "urn:nfc:sn:handover". We may want to parse
+  // and verify this more robustly.
   writeSlice.reset();
   CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, binaryLength}}));
   readSliceOpt =
@@ -96,6 +98,21 @@ std::optional<ReadSlice> performHandoff() {
   CHECK_RETURN_OPT(readSliceOpt);
   readSlice = *readSliceOpt;
   printHex("Binary: ", readSlice.span());
+
+  //   auto serviceParameter = std::ranges::search(readSlice.span(), "Tp");
+  //   CHECK_PRINT_RETURN_OPT("Service parameter not found",
+  //                          serviceParameter.size() > 0);
+  //   auto handoverData =
+  //       std::ranges::search(readSlice.span(), "urn:nfc:sn:handover");
+  //   CHECK_PRINT_RETURN_OPT("Handover data not found", handoverData.size() >
+  //   0);
+
+  // TODO: technically, we could have static handover here.
+  // We should test with Android to check in case it does static
+  // handover. If not, just keeping our implementation of negotiated
+  // handover works for me.
+
+  // Select the handover service (Ts)
 
   return std::nullopt;
 }
