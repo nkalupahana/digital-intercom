@@ -19,8 +19,7 @@ set(src
 
 idf_component_register(
     SRCS "${src}"
-    PRIV_INCLUDE_DIRS "NDEF"
-    INCLUDE_DIRS "PN532/src"
+    INCLUDE_DIRS "PN532/src" "NDEF"
     REQUIRES arduino-esp32
 )
 target_compile_definitions(${COMPONENT_LIB} PUBLIC NFC_INTERFACE_SPI) 
