@@ -11,6 +11,7 @@
 
 namespace DigitalID {
 uint8_t rbuf[PN532_PACKBUFFSIZ];
+uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 
@@ -111,16 +112,28 @@ std::optional<ReadSlice> performHandoff() {
   // Read NDEF record. Should contain an NDEF record of type Tp (service
   // parameter) with data including "urn:nfc:sn:handover". We may want to
   // parse and verify this more robustly.
-  auto ndefData = readNdefFile(false);
-  CHECK_RETURN_OPT(ndefData);
+  auto initialNdefData = readNdefFile(false);
+  CHECK_RETURN_OPT(initialNdefData);
 
-  auto serviceParameter =
-      std::ranges::search(*ndefData, std::string_view("Tp"));
-  CHECK_PRINT_RETURN_OPT("Service parameter not found",
-                         serviceParameter.size() > 0);
-  auto handoverData =
-      std::ranges::search(*ndefData, std::string_view("urn:nfc:sn:handover"));
-  CHECK_PRINT_RETURN_OPT("Handover data not found", handoverData.size() > 0);
+  auto initialNdefDataSpan = std::span<const uint8_t>(*initialNdefData);
+  auto initialNdefMessage =
+      NdefMessage(initialNdefDataSpan.data(), initialNdefDataSpan.size());
+  CHECK_PRINT_RETURN_OPT(
+      "Initial NDEF message does not contain one NDEF record",
+      initialNdefMessage.getRecordCount() == 1);
+  auto serviceParameterRecord = initialNdefMessage.getRecord(0);
+  CHECK_PRINT_RETURN_OPT("Record is not a service parameter",
+                         serviceParameterRecord.getType() == "Tp");
+  CHECK_PRINT_RETURN_OPT("Service parameter payload length is 0",
+                         serviceParameterRecord.getPayloadLength() > 0);
+  serviceParameterRecord.getPayload(ndefPayloadBuf);
+  auto payloadSpan = std::span<const uint8_t>(
+      ndefPayloadBuf, serviceParameterRecord.getPayloadLength());
+  auto payloadHandoverSearch =
+      std::ranges::search(payloadSpan, std::string_view("urn:nfc:sn:handover"));
+  CHECK_PRINT_RETURN_OPT(
+      "Handover service not in the service parameter record payload",
+      payloadHandoverSearch.size() > 0);
 
   // Technically, we could have static handover here.
   // However, both iOS and Android do negotiated handover
@@ -167,14 +180,14 @@ std::optional<ReadSlice> performHandoff() {
   auto serviceSelectedResponseSpan =
       std::span<const uint8_t>(*serviceSelectedResponse);
 
-  auto ndefMessage = NdefMessage(serviceSelectedResponseSpan.data(),
-                                 serviceSelectedResponseSpan.size());
+  auto statusMessage = NdefMessage(serviceSelectedResponseSpan.data(),
+                                   serviceSelectedResponseSpan.size());
 
   CHECK_PRINT_RETURN_OPT(
       "Service selected response does not contain one NDEF record",
-      ndefMessage.getRecordCount() == 1);
-  auto statusRecord = ndefMessage.getRecord(0);
-  CHECK_PRINT_RETURN_OPT("Status record is not a TNEP Status Message",
+      statusMessage.getRecordCount() == 1);
+  auto statusRecord = statusMessage.getRecord(0);
+  CHECK_PRINT_RETURN_OPT("Record is not a TNEP Status Message",
                          statusRecord.getType() == "Te");
   CHECK_PRINT_RETURN_OPT("Status record payload length is not 1",
                          statusRecord.getPayloadLength() == 1);
