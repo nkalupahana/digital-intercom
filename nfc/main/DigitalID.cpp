@@ -1,6 +1,7 @@
 #include "NFC.h"
 #include "NdefMessage.h"
 #include "NimBLECharacteristic.h"
+#include "NimBLELocalValueAttribute.h"
 #include "NimBLEServer.h"
 #include "Slice.h"
 #include "errors.h"
@@ -34,12 +35,24 @@ class IdentCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
   };
 } identCharacteristicCallbacks;
 
+class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic *pCharacteristic,
+                   NimBLEConnInfo &connInfo, uint16_t subValue) override {
+    Serial.println("Subscribed!");
+    NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
+                                               subValue);
+  };
+} stateCharacteristicCallbacks;
+
 uint8_t rbuf[PN532_PACKBUFFSIZ];
 uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 NimBLEServer *pServer = nullptr;
 NimBLEService *pService = nullptr;
+NimBLECharacteristic *stateCharacteristic = nullptr;
+NimBLECharacteristic *clientToServerCharacteristic = nullptr;
+NimBLECharacteristic *serverToClientCharacteristic = nullptr;
 NimBLECharacteristic *identCharacteristic = nullptr;
 
 std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
@@ -276,6 +289,14 @@ void setupBLEServer() {
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(&serverCallbacks);
   pService = pServer->createService("82186040-093c-4ff9-a90b-6994d231b2a4");
+  stateCharacteristic = pService->createCharacteristic(
+      "00000005-A123-48CE-896B-4C76973373E6",
+      NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
+  stateCharacteristic->setCallbacks(&stateCharacteristicCallbacks);
+  clientToServerCharacteristic = pService->createCharacteristic(
+      "00000006-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::WRITE_NR);
+  serverToClientCharacteristic = pService->createCharacteristic(
+      "00000007-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::NOTIFY);
   identCharacteristic = pService->createCharacteristic(
       "00000008-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::READ);
   identCharacteristic->setCallbacks(&identCharacteristicCallbacks);
