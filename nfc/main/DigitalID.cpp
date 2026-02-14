@@ -1,4 +1,5 @@
 #include "NFC.h"
+#include "NdefMessage.h"
 #include "Slice.h"
 #include "errors.h"
 #include "utils.h"
@@ -60,7 +61,7 @@ std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
   CHECK_RETURN_OPT(readSliceOpt);
   readSlice = *readSliceOpt;
 
-  return readSlice.span();
+  return readSlice.span().subspan(2, readSlice.span().size() - 2);
 }
 
 bool checkIfValid() {
@@ -157,6 +158,29 @@ std::optional<ReadSlice> performHandoff() {
   // Read response
   auto serviceSelectedResponse = readNdefFile(false);
   CHECK_RETURN_OPT(serviceSelectedResponse);
+
+  // From NDEF Exchange Protocol 1.0: 4.3 TNEP Status Message
+  // If the NFC Tag Device has received a Service Select Message with a known
+  // Service, it will return a TNEP Status Message to confirm a successful
+  // Service selection.
+  // https://github.com/openwallet-foundation/multipaz/blob/main/multipaz/src/commonMain/kotlin/org/multipaz/mdoc/nfc/MdocNfcEngagementHelper.kt#L224
+  auto serviceSelectedResponseSpan =
+      std::span<const uint8_t>(*serviceSelectedResponse);
+
+  auto ndefMessage = NdefMessage(serviceSelectedResponseSpan.data(),
+                                 serviceSelectedResponseSpan.size());
+
+  CHECK_PRINT_RETURN_OPT(
+      "Service selected response does not contain one NDEF record",
+      ndefMessage.getRecordCount() == 1);
+  auto statusRecord = ndefMessage.getRecord(0);
+  CHECK_PRINT_RETURN_OPT("Status record is not a TNEP Status Message",
+                         statusRecord.getType() == "Te");
+  CHECK_PRINT_RETURN_OPT("Status record payload length is not 1",
+                         statusRecord.getPayloadLength() == 1);
+  byte statusCode = 0xFF;
+  statusRecord.getPayload(&statusCode);
+  CHECK_PRINT_RETURN_OPT("Status code is not 0x00", statusCode == 0x00);
 
   // Send handover request
   // Generated via tools/multipaz-sandbox
