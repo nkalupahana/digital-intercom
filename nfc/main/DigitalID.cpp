@@ -288,6 +288,7 @@ void setupBLEServer() {
   NimBLEDevice::init("NimBLE");
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(&serverCallbacks);
+  pServer->advertiseOnDisconnect(true);
   pService = pServer->createService("82186040-093c-4ff9-a90b-6994d231b2a4");
   stateCharacteristic = pService->createCharacteristic(
       "00000005-A123-48CE-896B-4C76973373E6",
