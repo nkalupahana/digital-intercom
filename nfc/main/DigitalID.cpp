@@ -96,14 +96,27 @@ std::optional<ReadSlice> performHandoff() {
   // Read CC
   auto ccData = readNdefFile(true);
   CHECK_RETURN_OPT(ccData);
+  auto ccDataSpan = std::span<const uint8_t>(*ccData);
+  // Based on spec, CC data should be at least 13 bytes
+  // (15 bytes - 2 bytes for length at beginning)
+  CHECK_PRINT_RETURN_OPT("CC data is not at least 13 bytes",
+                         ccDataSpan.size() >= 13);
+  auto ccTlvSpan = ccDataSpan.subspan(5, ccDataSpan.size() - 5);
+  printHex("CC TLV: ", ccTlvSpan);
+  TLVS tlvs;
+  tlvs.decodeTLVs(ccTlvSpan.data(), ccTlvSpan.size());
+  TLVNode *fileControlTag = tlvs.findTLV(0x04);
+  CHECK_PRINT_RETURN_OPT("Failed to get file control tag from CC data",
+                         fileControlTag != nullptr);
+  std::span<const uint8_t> fileControlValue{fileControlTag->getValue(),
+                                            fileControlTag->getValueLength()};
+  CHECK_PRINT_RETURN_OPT("File control tag value is not at least length 2",
+                         fileControlValue.size() >= 2);
 
-  // TODO: parse file out of CC data, there is TLV encoding in here. for now,
-  // hardcoding 0xE104 NDEF select file
-  // https://discord.com/channels/@me/783194785975369738/1445435281934123008
   // SELECT NDEF File
   writeSlice.reset();
-  CHECK_RETURN_OPT(
-      writeSlice.appendApduCommand(0x00, 0xA4, 0x00, 0x0C, {{0xE1, 0x04}}));
+  CHECK_RETURN_OPT(writeSlice.appendApduCommand(
+      0x00, 0xA4, 0x00, 0x0C, {{fileControlValue[0], fileControlValue[1]}}));
   readSliceOpt =
       NFC::exchangeData("Sending NDEF Select File: ", writeSlice.span(), rbuf);
   CHECK_RETURN_OPT(readSliceOpt);
