@@ -16,24 +16,42 @@ WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
+  uint8_t binaryLength = 0;
+  uint8_t retries = 0;
 
-  // Read return data length
-  writeSlice.reset();
-  CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x02}}));
-  readSliceOpt = NFC::exchangeData("Sending read: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
-  readSlice = *readSliceOpt;
-  printHex("Data length: ", readSlice.span());
+  while (binaryLength == 0 && retries < 5) {
+    // Read return data length
+    writeSlice.reset();
+    CHECK_RETURN_OPT(writeSlice.append({{0x00, 0xB0, 0x00, 0x00, 0x02}}));
+    readSliceOpt = NFC::exchangeData("Sending read: ", writeSlice.span(), rbuf);
+    CHECK_RETURN_OPT(readSliceOpt);
+    readSlice = *readSliceOpt;
+    printHex("Data length: ", readSlice.span());
 
-  // Assert byte 0 is 0x00, and length is 2.
-  // It is possible that byte 0 is not 0x00.
-  // In that case, we would need to read repeatedly with offset.
-  // But I haven't seen this in practice, so we'll just assert it.
-  CHECK_PRINT_RETURN_OPT("Binary length is not 2",
-                         readSlice.span().size() == 2);
-  CHECK_PRINT_RETURN_OPT("Binary length byte 0 is not 0x00",
-                         readSlice.span()[0] == 0x00);
-  uint8_t binaryLength = readSlice.span()[1] + (isCC ? 0 : 2);
+    // Assert byte 0 is 0x00, and length is 2.
+    // It is possible that byte 0 is not 0x00.
+    // In that case, we would need to read repeatedly with offset.
+    // But I haven't seen this in practice, so we'll just assert it.
+    CHECK_PRINT_RETURN_OPT("Binary length is not 2",
+                           readSlice.span().size() == 2);
+    CHECK_PRINT_RETURN_OPT("Binary length byte 0 is not 0x00",
+                           readSlice.span()[0] == 0x00);
+    binaryLength = readSlice.span()[1];
+
+    if (binaryLength == 0) {
+      ESP_LOGI(TAG, "No data from NDEF file, retrying...");
+      ++retries;
+      delay(100);
+    }
+  }
+
+  if (retries == 5) {
+    ESP_LOGE(TAG, "Did not get any data from NDEF file");
+    return std::nullopt;
+  }
+
+  if (!isCC)
+    binaryLength += 2;
 
   // Read data
   writeSlice.reset();
@@ -141,7 +159,38 @@ std::optional<ReadSlice> performHandoff() {
   CHECK_RETURN_OPT(serviceSelectedResponse);
 
   // Send handover request
+  // Generated via tools/multipaz-sandbox
+  auto handoverRequestSpan = std::span<const uint8_t>(
+      {0x91, 0x02, 0x0A, 0x48, 0x72, 0x15, 0xD1, 0x02, 0x04, 0x61, 0x63, 0x01,
+       0x01, 0x30, 0x00, 0x1C, 0x1E, 0x06, 0x0A, 0x69, 0x73, 0x6F, 0x2E, 0x6F,
+       0x72, 0x67, 0x3A, 0x31, 0x38, 0x30, 0x31, 0x33, 0x3A, 0x72, 0x65, 0x61,
+       0x64, 0x65, 0x72, 0x65, 0x6E, 0x67, 0x61, 0x67, 0x65, 0x6D, 0x65, 0x6E,
+       0x74, 0x6D, 0x64, 0x6F, 0x63, 0x72, 0x65, 0x61, 0x64, 0x65, 0x72, 0xA1,
+       0x00, 0x63, 0x31, 0x2E, 0x30, 0x5A, 0x20, 0x15, 0x01, 0x61, 0x70, 0x70,
+       0x6C, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2F, 0x76, 0x6E, 0x64,
+       0x2E, 0x62, 0x6C, 0x75, 0x65, 0x74, 0x6F, 0x6F, 0x74, 0x68, 0x2E, 0x6C,
+       0x65, 0x2E, 0x6F, 0x6F, 0x62, 0x30, 0x02, 0x1C, 0x00, 0x11, 0x07, 0xA4,
+       0xB2, 0x31, 0xD2, 0x94, 0x69, 0x0B, 0xA9, 0xF9, 0x4F, 0x3C, 0x09, 0x40,
+       0x60, 0x18, 0x82});
 
+  // Write to file: length + message
+  writeSlice.reset();
+  CHECK_RETURN_OPT(writeSlice.append(
+      {{0x00, 0xD6, 0x00, 0x00,
+        static_cast<uint8_t>(handoverRequestSpan.size() + 2), 0,
+        static_cast<uint8_t>(handoverRequestSpan.size())}}));
+  writeSlice.append(handoverRequestSpan);
+  readSliceOpt =
+      NFC::exchangeData("Writing Handover Request: ", writeSlice.span(), rbuf);
+  CHECK_RETURN_OPT(readSliceOpt);
+  readSlice = *readSliceOpt;
+
+  auto handoverResponse = readNdefFile(false);
+  CHECK_RETURN_OPT(handoverResponse);
+  printHex("Handover Response: ", *handoverResponse);
+
+  // TODO: return handover response to be used by the caller
+  // for BLE stuff
   return std::nullopt;
 }
 
