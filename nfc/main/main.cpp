@@ -55,6 +55,8 @@ void setup() {
     errorHang();
   }
 
+  DigitalID::setupBLEServer();
+
   ESP_LOGI(TAG, "Ready!");
 }
 

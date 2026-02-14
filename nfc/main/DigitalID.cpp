@@ -1,19 +1,46 @@
 #include "NFC.h"
 #include "NdefMessage.h"
+#include "NimBLECharacteristic.h"
+#include "NimBLEServer.h"
 #include "Slice.h"
 #include "errors.h"
 #include "utils.h"
 #include <NdefRecord.h>
+#include <NimBLEDevice.h>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <tlv.h>
 
 namespace DigitalID {
+class ServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override {
+    Serial.println("Connected!");
+    NimBLEServerCallbacks::onConnect(pServer, connInfo);
+  };
+
+  void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo,
+                    int reason) override {
+    Serial.println("Disconnected!");
+    NimBLEServerCallbacks::onDisconnect(pServer, connInfo, reason);
+  };
+} serverCallbacks;
+
+class IdentCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
+  void onRead(NimBLECharacteristic *pCharacteristic,
+              NimBLEConnInfo &connInfo) override {
+    Serial.println("Read!");
+    NimBLECharacteristicCallbacks::onRead(pCharacteristic, connInfo);
+  };
+} identCharacteristicCallbacks;
+
 uint8_t rbuf[PN532_PACKBUFFSIZ];
 uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
+NimBLEServer *pServer = nullptr;
+NimBLEService *pService = nullptr;
+NimBLECharacteristic *identCharacteristic = nullptr;
 
 std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
   std::optional<ReadSlice> readSliceOpt;
@@ -242,6 +269,24 @@ std::optional<ReadSlice> performHandoff() {
   // TODO: return handover response to be used by the caller
   // for BLE stuff
   return std::nullopt;
+}
+
+void setupBLEServer() {
+  NimBLEDevice::init("NimBLE");
+  pServer = NimBLEDevice::createServer();
+  pServer->setCallbacks(&serverCallbacks);
+  pService = pServer->createService("82186040-093c-4ff9-a90b-6994d231b2a4");
+  identCharacteristic = pService->createCharacteristic(
+      "00000008-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::READ);
+  identCharacteristic->setCallbacks(&identCharacteristicCallbacks);
+
+  pService->start();
+  identCharacteristic->setValue("Uninitialized");
+
+  NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+  pAdvertising->setName("Digital Intercom");
+  pAdvertising->addServiceUUID(pService->getUUID());
+  pAdvertising->start();
 }
 
 } // namespace DigitalID

@@ -5,6 +5,8 @@
 #include <tlv.h>
 
 namespace DigitalID {
+void setupBLEServer();
+
 bool checkIfValid();
 std::optional<ReadSlice> performHandoff();
 } // namespace DigitalID

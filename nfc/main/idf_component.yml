@@ -4,3 +4,4 @@ dependencies:
     git: https://github.com/Ace314159/tlv.arduino.git
   RadioHead:
     git: https://github.com/nkalupahana/radiohead-esp-idf.git
+  h2zero/esp-nimble-cpp: 2.3.4

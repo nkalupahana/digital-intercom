@@ -5,4 +5,5 @@ cmake_minimum_required(VERSION 3.5)
 add_compile_definitions(RH_ESP32_USE_HSPI)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+add_compile_definitions(ARDUINO_ARCH_ESP32=1) # For NimBLE
 project(digital-intercom)
