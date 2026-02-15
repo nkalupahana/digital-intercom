@@ -54,6 +54,7 @@ NimBLECharacteristic *stateCharacteristic = nullptr;
 NimBLECharacteristic *clientToServerCharacteristic = nullptr;
 NimBLECharacteristic *serverToClientCharacteristic = nullptr;
 NimBLECharacteristic *identCharacteristic = nullptr;
+NimBLEAdvertising *pAdvertising = nullptr;
 
 std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
   std::optional<ReadSlice> readSliceOpt;
@@ -281,14 +282,14 @@ std::optional<ReadSlice> performHandoff() {
 
   // TODO: return handover response to be used by the caller
   // for BLE stuff
+  pAdvertising->start();
   return std::nullopt;
 }
 
 void setupBLEServer() {
-  NimBLEDevice::init("NimBLE");
+  NimBLEDevice::init("Digital Intercom");
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(&serverCallbacks);
-  pServer->advertiseOnDisconnect(true);
   pService = pServer->createService("82186040-093c-4ff9-a90b-6994d231b2a4");
   stateCharacteristic = pService->createCharacteristic(
       "00000005-A123-48CE-896B-4C76973373E6",
@@ -305,10 +306,11 @@ void setupBLEServer() {
   pService->start();
   identCharacteristic->setValue("Uninitialized");
 
-  NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-  pAdvertising->setName("Digital Intercom");
+  pAdvertising = pServer->getAdvertising();
+  pAdvertising->clearData();
   pAdvertising->addServiceUUID(pService->getUUID());
-  pAdvertising->start();
+  pAdvertising->enableScanResponse(true);
+  pAdvertising->setName("Digital Intercom");
 }
 
 } // namespace DigitalID
