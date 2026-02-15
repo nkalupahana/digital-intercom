@@ -9,17 +9,42 @@ import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.buildCborMap
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethod
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
+import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodNfc
 import org.multipaz.mdoc.role.MdocRole
 import org.multipaz.nfc.HandoverRequestRecord
 import org.multipaz.nfc.NdefMessage
 import org.multipaz.nfc.NdefRecord
 import org.multipaz.util.UUID
 
+fun main() {
+    App.generateBleHandover()
+}
+
 class App {
-    val greeting: String
-        get() {
-            return "Hello World!"
+    companion object {
+        val hexFormat = HexFormat {
+            upperCase = true
+            bytes {
+                bytePrefix = "0x"
+                byteSeparator = ", "
+            }
         }
+        val uuid = UUID.fromString("82186040-093c-4ff9-a90b-6994d231b2a4")
+
+        fun generateBleHandover() {
+            val bleMethod = MdocConnectionMethodBle(false, true, null, uuid)
+            val message = generateHandoverRequestMessage(listOf(bleMethod));
+            println(message.encode().toHexString(hexFormat))
+            println(message.encode().size)
+        }
+
+        fun generateNfcHandover() {
+            val nfcMethod = MdocConnectionMethodNfc(200, 200);
+            val message = generateHandoverRequestMessage(listOf(nfcMethod))
+            println(message.encode().toHexString(hexFormat))
+            println(message.encode().size)
+        }
+    }
 }
 
 // copied from mdocReaderNfcHandoff.kt
@@ -61,38 +86,4 @@ fun generateHandoverRequestMessage(
             )
         ) + carrierConfigurationRecords
     )
-}
-
-fun main() {
-//    val message = NdefMessage(
-//        listOf(
-//            ServiceSelectRecord(Nfc.SERVICE_NAME_CONNECTION_HANDOVER).toNdefRecord()
-//        )
-//    )
-//    println(message.encode().toHexString(HexFormat.Default))
-//    val nfcMethod = MdocConnectionMethodNfc(200, 200);
-    val hexFormat = HexFormat {
-        upperCase = true
-        bytes {
-            bytePrefix = "0x"
-            byteSeparator = ", "
-        }
-    }
-
-    val uuid = UUID.fromString("82186040-093c-4ff9-a90b-6994d231b2a4")
-    println(uuid.toByteArray().toHexString(hexFormat))
-    val bleMethod = MdocConnectionMethodBle(false, true, null, uuid)
-    val message = generateHandoverRequestMessage(listOf(bleMethod));
-    println(message.encode().toHexString(hexFormat))
-    println(message.encode().size)
-    println(App().greeting)
-
-//    val data = Cbor.decode("A40063312E31018201D818584BA401022001215820E592F40BD4AB7C3F8A216BE467F8DFDCBCECB6471FA3CB634765F5075B8929D32258206D065F94BB78591031B25BA64836B2380C0A63CC260AB49DBE0F62D69808F2A4058006A203F504F5".hexToByteArray())
-//    val key = data.get(1)[1];
-//    val processed = Cbor.encode(key);
-//    println(processed.toHexString(HexFormat.Default))
-//
-//    val info = "BLEIdent".encodeToByteArray()
-//    val salt = null
-//    println(Hkdf.deriveKey(Algorithm.HMAC_SHA256, processed, salt, info, 16).toHexString(HexFormat.Default))
 }
