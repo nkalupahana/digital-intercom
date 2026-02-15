@@ -5,3 +5,4 @@ dependencies:
   RadioHead:
     git: https://github.com/nkalupahana/radiohead-esp-idf.git
   h2zero/esp-nimble-cpp: 2.3.4
+  espressif/cbor: ^0.6.1~4

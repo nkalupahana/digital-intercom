@@ -159,7 +159,7 @@ dependencies:
       require: private
       version: '>=5.0'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 0.6.1~4
   espressif/esp-dsp:
@@ -503,8 +503,9 @@ dependencies:
 direct_dependencies:
 - RadioHead
 - espressif/arduino-esp32
+- espressif/cbor
 - h2zero/esp-nimble-cpp
 - tlv_arduino
-manifest_hash: 4ce0ea6f4f84842a4409c5162f6a2b674d7699631b0ad6de0debba2a9d442937
+manifest_hash: 6cbc5e7c463dbad19faaf8df44f1e78252270480bc0164044af762a14a490ad3
 target: esp32
 version: 2.0.0

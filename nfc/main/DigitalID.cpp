@@ -282,7 +282,12 @@ std::optional<ReadSlice> performHandoff() {
 
   // TODO: return handover response to be used by the caller
   // for BLE stuff
-  pAdvertising->start();
+  if (pAdvertising) {
+    pAdvertising->start();
+  } else {
+    ESP_LOGE(TAG,
+             "Tried to start advertising, but advertising is not initialized");
+  }
   return std::nullopt;
 }
 
