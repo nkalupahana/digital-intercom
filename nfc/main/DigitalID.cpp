@@ -4,6 +4,7 @@
 #include "NimBLELocalValueAttribute.h"
 #include "NimBLEServer.h"
 #include "Slice.h"
+#include "cbor.h"
 #include "errors.h"
 #include "utils.h"
 #include <NdefRecord.h>
@@ -45,7 +46,7 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 } stateCharacteristicCallbacks;
 
 uint8_t rbuf[PN532_PACKBUFFSIZ];
-uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
+uint8_t readerPublicKeyBuf[PN532_PACKBUFFSIZ];
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 NimBLEServer *pServer = nullptr;
@@ -117,9 +118,10 @@ bool checkIfValid() {
   return data.has_value();
 }
 
-std::optional<ReadSlice> performHandoff() {
+std::optional<std::span<const uint8_t>> performHandoff() {
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
+  uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
 
   // All CC/NDEF ADPU commands are from the Type 4 Tag Operation Specification
 
@@ -280,15 +282,97 @@ std::optional<ReadSlice> performHandoff() {
   CHECK_RETURN_OPT(handoverResponse);
   printHex("Handover Response: ", *handoverResponse);
 
-  // TODO: return handover response to be used by the caller
-  // for BLE stuff
+  auto handoverResponseSpan = std::span<const uint8_t>(*handoverResponse);
+  auto handoverResponseMessage =
+      NdefMessage(handoverResponseSpan.data(), handoverResponseSpan.size());
+  std::optional<std::span<const uint8_t>> encodedDeviceEngagementOpt =
+      std::nullopt;
+  for (int i = 0; i < handoverResponseMessage.getRecordCount(); i++) {
+    auto record = handoverResponseMessage.getRecord(i);
+    if (record.getType() == "iso.org:18013:deviceengagement" &&
+        record.getId() == "mdoc") {
+      record.getPayload(ndefPayloadBuf);
+      encodedDeviceEngagementOpt =
+          std::span<const uint8_t>(ndefPayloadBuf, record.getPayloadLength());
+    }
+  }
+  CHECK_RETURN_OPT(encodedDeviceEngagementOpt);
+  auto encodedDeviceEngagementSpan = *encodedDeviceEngagementOpt;
+  printHex("Encoded device engagement: ", encodedDeviceEngagementSpan);
+
+  CborParser parser;
+  CborValue value;
+  CHECK_PRINT_RETURN_OPT("CBOR parser fialed to initialize",
+                         cbor_parser_init(encodedDeviceEngagementSpan.data(),
+                                          encodedDeviceEngagementSpan.size(), 0,
+                                          &parser, &value) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&value));
+  CHECK_PRINT_RETURN_OPT("Failed to enter map",
+                         cbor_value_enter_container(&value, &value) ==
+                             CborNoError);
+  std::optional<CborValue> keyOpt = std::nullopt;
+  while (!cbor_value_at_end(&value)) {
+    if (cbor_value_is_unsigned_integer(&value)) {
+      uint64_t key;
+      CHECK_PRINT_RETURN_OPT("Failed to get key",
+                             cbor_value_get_uint64(&value, &key) ==
+                                 CborNoError);
+      if (key == 1) {
+        keyOpt = value;
+        break;
+      }
+    }
+    CHECK_PRINT_RETURN_OPT("Failed to advance",
+                           cbor_value_advance(&value) == CborNoError);
+  }
+  CHECK_RETURN_OPT(keyOpt);
+  CHECK_PRINT_RETURN_OPT("Failed to advance to data",
+                         cbor_value_advance(&value) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("Data is not array", cbor_value_is_array(&value));
+  CHECK_PRINT_RETURN_OPT("Failed to enter array",
+                         cbor_value_enter_container(&value, &value) ==
+                             CborNoError);
+  CHECK_PRINT_RETURN_OPT("First value is not uint",
+                         cbor_value_is_unsigned_integer(&value));
+  uint64_t cipherSuiteIdentifier;
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to get cipher suite identifier",
+      cbor_value_get_uint64(&value, &cipherSuiteIdentifier) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("Cipher suite identifier is not 1, which is the only "
+                         "identifier we know about",
+                         cipherSuiteIdentifier == 1);
+  CHECK_PRINT_RETURN_OPT("Failed to advance to tagged reader public key",
+                         cbor_value_advance(&value) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("Tagged reader public key is not tagged",
+                         cbor_value_is_tag(&value));
+  CborTag readerPublicKeyTag;
+  CHECK_PRINT_RETURN_OPT("Failed to get reader public key tag",
+                         cbor_value_get_tag(&value, &readerPublicKeyTag) ==
+                             CborNoError);
+  CHECK_PRINT_RETURN_OPT("Reader public key tag is not 24",
+                         readerPublicKeyTag == 24);
+  CHECK_PRINT_RETURN_OPT("Failed to advance to reader public key",
+                         cbor_value_advance(&value) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("Reader public key is not byte string",
+                         cbor_value_is_byte_string(&value));
+  size_t readerPublicKeyLength = PN532_PACKBUFFSIZ;
+  CHECK_PRINT_RETURN_OPT("Failed to get reader public key",
+                         cbor_value_copy_byte_string(&value, readerPublicKeyBuf,
+                                                     &readerPublicKeyLength,
+                                                     &value) == CborNoError);
+  std::span<const uint8_t> readerPublicKeySpan(readerPublicKeyBuf,
+                                               readerPublicKeyLength);
+  printHex("Reader public key: ", readerPublicKeySpan);
+
+  // TODO: also need to return full handover response to be used by the caller
+  // for encryption stuff
   if (pAdvertising) {
     pAdvertising->start();
   } else {
     ESP_LOGE(TAG,
              "Tried to start advertising, but advertising is not initialized");
   }
-  return std::nullopt;
+  return readerPublicKeySpan;
 }
 
 void setupBLEServer() {
