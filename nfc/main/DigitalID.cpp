@@ -310,7 +310,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   CHECK_PRINT_RETURN_OPT("Failed to enter map",
                          cbor_value_enter_container(&value, &value) ==
                              CborNoError);
-  std::optional<CborValue> keyOpt = std::nullopt;
+  bool keyFound = false;
   while (!cbor_value_at_end(&value)) {
     if (cbor_value_is_unsigned_integer(&value)) {
       uint64_t key;
@@ -318,14 +318,14 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                              cbor_value_get_uint64(&value, &key) ==
                                  CborNoError);
       if (key == 1) {
-        keyOpt = value;
+        keyFound = true;
         break;
       }
     }
     CHECK_PRINT_RETURN_OPT("Failed to advance",
                            cbor_value_advance(&value) == CborNoError);
   }
-  CHECK_RETURN_OPT(keyOpt);
+  CHECK_PRINT_RETURN_OPT("Key 1 not found", keyFound);
   CHECK_PRINT_RETURN_OPT("Failed to advance to data",
                          cbor_value_advance(&value) == CborNoError);
   CHECK_PRINT_RETURN_OPT("Data is not array", cbor_value_is_array(&value));
