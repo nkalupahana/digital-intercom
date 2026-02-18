@@ -22,6 +22,16 @@
     }                                                                          \
   } while (0)
 
+#define ASSERT_CODE_PRINT_RETURN_BOOL(error_string, code, ...)                 \
+  do {                                                                         \
+    int errorCode = code;                                                      \
+    if (code != 0) {                                                           \
+      ESP_LOGE(TAG, error_string " - Code: %x" __VA_OPT__(, ) __VA_ARGS__,     \
+               errorCode);                                                     \
+      return false;                                                            \
+    }                                                                          \
+  } while (0)
+
 #define CHECK_PRINT_RETURN_BOOL(error_string, code, ...)                       \
   CHECK_PRINT_RETURN_VAL(error_string, code, false, __VA_ARGS__)
 
