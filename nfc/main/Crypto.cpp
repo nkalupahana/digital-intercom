@@ -1,10 +1,11 @@
 #include "errors.h"
-#include "mbedtls/bignum.h"
 #include "utils.h"
+#include <cstdint>
 #include <mbedtls/bignum.h>
 #include <mbedtls/ecdh.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/entropy.h>
+#include <mbedtls/gcm.h>
 #include <mbedtls/hkdf.h>
 #include <psa/crypto.h>
 
@@ -136,8 +137,30 @@ bool test(std::span<const uint8_t> deviceXY) {
                                      sizeof(sharedSecretBuf), info, 8,
                                      hkdfOutput, sizeof(hkdfOutput)));
 
+  esp_gcm_context gcmCtx;
+  mbedtls_gcm_init(&gcmCtx);
+  uint8_t requestToEncrypt[] = {
+      162, 103, 100, 111, 99,  84,  121, 112, 101, 117, 111, 114, 103, 46,  105,
+      115, 111, 46,  49,  56,  48,  49,  51,  46,  53,  46,  49,  46,  109, 68,
+      76,  106, 110, 97,  109, 101, 83,  112, 97,  99,  101, 115, 161, 113, 111,
+      114, 103, 46,  105, 115, 111, 46,  49,  56,  48,  49,  51,  46,  53,  46,
+      49,  161, 106, 103, 105, 118, 101, 110, 95,  110, 97,  109, 101, 245};
+  uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+  ASSERT_CODE_PRINT_RETURN_BOOL(
+      "Failed to set key",
+      mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, hkdfOutput, 256));
+  uint8_t encrypted[255];
+  uint8_t tag[16];
+  uint8_t ad;
+  ASSERT_CODE_PRINT_RETURN_BOOL(
+      "Failed to encrypt",
+      mbedtls_gcm_crypt_and_tag(
+          &gcmCtx, MBEDTLS_GCM_ENCRYPT, sizeof(requestToEncrypt), iv,
+          sizeof(iv), &ad, 0, requestToEncrypt, encrypted, sizeof(tag), tag));
+
   mbedtls_mpi_write_file("Shared ", &sharedSecret, 16, NULL);
   printHex("HKDF Output ", {hkdfOutput, sizeof(hkdfOutput)});
+  printHex("Encrypted Output ", {encrypted, sizeof(encrypted)});
 
   return true;
   // ... PERFORM ECDH OPERATIONS HERE ...
