@@ -4,6 +4,7 @@
 #include <HardwareSerial.h>
 #include <cstdint>
 #include <cstring>
+#include <mbedtls/ecp.h>
 #include <string_view>
 
 ReadSlice::ReadSlice(const uint8_t *data, size_t len)

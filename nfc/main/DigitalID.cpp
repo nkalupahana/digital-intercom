@@ -1,3 +1,4 @@
+#include "Crypto.h"
 #include "NFC.h"
 #include "NdefMessage.h"
 #include "NimBLECharacteristic.h"
@@ -372,6 +373,9 @@ std::optional<std::span<const uint8_t>> performHandoff() {
     ESP_LOGE(TAG,
              "Tried to start advertising, but advertising is not initialized");
   }
+
+  Crypto::test();
+
   return readerPublicKeySpan;
 }
 

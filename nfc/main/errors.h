@@ -1,4 +1,5 @@
 #pragma once
+#include <esp_log.h>
 
 #define CHECK_RETURN_VAL(code, retVal)                                         \
   do {                                                                         \
@@ -16,8 +17,7 @@
 #define CHECK_PRINT_RETURN_VAL(error_string, code, retVal, ...)                \
   do {                                                                         \
     if (!(code)) {                                                             \
-      Serial.printf(error_string __VA_OPT__(, ) __VA_ARGS__);                  \
-      Serial.println();                                                        \
+      ESP_LOGE(TAG, error_string __VA_OPT__(, ) __VA_ARGS__);                  \
       return retVal;                                                           \
     }                                                                          \
   } while (0)

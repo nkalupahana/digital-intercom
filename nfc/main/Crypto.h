@@ -1,0 +1,3 @@
+namespace Crypto {
+bool test();
+}
