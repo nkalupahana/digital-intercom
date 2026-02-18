@@ -49,7 +49,10 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 uint8_t rbuf[PN532_PACKBUFFSIZ];
 uint8_t readerPublicKeyBuf[PN532_PACKBUFFSIZ];
 constexpr size_t COORD_LENGTH = 32;
-uint8_t deviceXYBuf[COORD_LENGTH * 2];
+uint8_t deviceXYPubKeyEncodedBuf[COORD_LENGTH * 2 + 1];
+std::span<uint8_t> devicePubKeyX{deviceXYPubKeyEncodedBuf + 1, COORD_LENGTH};
+std::span<uint8_t> devicePubKeyY{deviceXYPubKeyEncodedBuf + 1 + COORD_LENGTH,
+                                 COORD_LENGTH};
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 NimBLEServer *pServer = nullptr;
@@ -61,6 +64,7 @@ NimBLECharacteristic *identCharacteristic = nullptr;
 NimBLEAdvertising *pAdvertising = nullptr;
 
 std::optional<std::span<const uint8_t>> readNdefFile(bool isCC) {
+  deviceXYPubKeyEncodedBuf[0] = 0x04; // Uncompressed public key
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
   uint8_t binaryLength = 0;
@@ -392,13 +396,13 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                                cbor_value_advance(&keyValue) == CborNoError);
         CHECK_PRINT_RETURN_OPT("x is not byte string",
                                cbor_value_is_byte_string(&keyValue));
-        size_t xLength = COORD_LENGTH;
+        size_t xLength = devicePubKeyX.size();
         CHECK_PRINT_RETURN_OPT(
             "Failed to get x",
-            cbor_value_copy_byte_string(&keyValue, deviceXYBuf, &xLength,
-                                        NULL) == CborNoError);
+            cbor_value_copy_byte_string(&keyValue, devicePubKeyX.data(),
+                                        &xLength, NULL) == CborNoError);
         CHECK_PRINT_RETURN_OPT("x length is not 32", xLength == COORD_LENGTH);
-        xSpanOpt = std::span<const uint8_t>(deviceXYBuf, xLength);
+        xSpanOpt = devicePubKeyX;
       }
 
       if (key == -3) {
@@ -406,15 +410,14 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                                cbor_value_advance(&keyValue) == CborNoError);
         CHECK_PRINT_RETURN_OPT("y is not byte string",
                                cbor_value_is_byte_string(&keyValue));
-        size_t yLength = COORD_LENGTH;
+        size_t yLength = devicePubKeyY.size();
 
         CHECK_PRINT_RETURN_OPT(
             "Failed to get y",
-            cbor_value_copy_byte_string(&keyValue, deviceXYBuf + COORD_LENGTH,
+            cbor_value_copy_byte_string(&keyValue, devicePubKeyY.data(),
                                         &yLength, NULL) == CborNoError);
         CHECK_PRINT_RETURN_OPT("y length is not 32", yLength == COORD_LENGTH);
-        ySpanOpt =
-            std::span<const uint8_t>(deviceXYBuf + COORD_LENGTH, yLength);
+        ySpanOpt = devicePubKeyY;
       }
     }
 
@@ -433,9 +436,8 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                   "initialized");
   }
 
-  printHex("Device XY: ",
-           std::span<const uint8_t>(deviceXYBuf, COORD_LENGTH * 2));
-  Crypto::test(std::span<const uint8_t>(deviceXYBuf, COORD_LENGTH * 2));
+  printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
+  Crypto::test({deviceXYPubKeyEncodedBuf});
 
   return readerPublicKeySpan;
 }

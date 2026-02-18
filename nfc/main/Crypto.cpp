@@ -18,7 +18,6 @@ bool test(std::span<const uint8_t> deviceXY) {
 
   // 1. Context definitions
   mbedtls_ecp_keypair keypair;
-  int ret;
 
   // The private key hex string from your snippet
   const char *priv_hex =

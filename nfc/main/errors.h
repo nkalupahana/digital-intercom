@@ -27,7 +27,7 @@
     int errorCode = code;                                                      \
     if (code != 0) {                                                           \
       ESP_LOGE(TAG, error_string " - Code: %x" __VA_OPT__(, ) __VA_ARGS__,     \
-               errorCode);                                                     \
+               -errorCode);                                                    \
       return false;                                                            \
     }                                                                          \
   } while (0)
