@@ -48,6 +48,8 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 
 uint8_t rbuf[PN532_PACKBUFFSIZ];
 uint8_t readerPublicKeyBuf[PN532_PACKBUFFSIZ];
+constexpr size_t COORD_LENGTH = 32;
+uint8_t deviceXYBuf[COORD_LENGTH * 2];
 uint8_t sbuf[PN532_PACKBUFFSIZ];
 WriteSlice writeSlice(sbuf, PN532_PACKBUFFSIZ);
 NimBLEServer *pServer = nullptr;
@@ -365,16 +367,75 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                                                readerPublicKeyLength);
   printHex("Reader public key: ", readerPublicKeySpan);
 
-  // TODO: also need to return full handover response to be used by the caller
-  // for encryption stuff
+  CborParser keyParser;
+  CborValue keyValue;
+  std::optional<std::span<const uint8_t>> xSpanOpt = std::nullopt;
+  std::optional<std::span<const uint8_t>> ySpanOpt = std::nullopt;
+  CHECK_PRINT_RETURN_OPT(
+      "CBOR parser fialed to initialize",
+      cbor_parser_init(readerPublicKeySpan.data(), readerPublicKeySpan.size(),
+                       0, &keyParser, &keyValue) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&keyValue));
+  CHECK_PRINT_RETURN_OPT("Failed to enter map",
+                         cbor_value_enter_container(&keyValue, &keyValue) ==
+                             CborNoError);
+  // Find -2 (x) and -3 (y)
+  while (!cbor_value_at_end(&keyValue) &&
+         (!xSpanOpt.has_value() || !ySpanOpt.has_value())) {
+    if (cbor_value_is_negative_integer(&keyValue)) {
+      int key;
+      CHECK_PRINT_RETURN_OPT("Failed to get key",
+                             cbor_value_get_int(&keyValue, &key) ==
+                                 CborNoError);
+      if (key == -2) {
+        CHECK_PRINT_RETURN_OPT("Failed to advance to x",
+                               cbor_value_advance(&keyValue) == CborNoError);
+        CHECK_PRINT_RETURN_OPT("x is not byte string",
+                               cbor_value_is_byte_string(&keyValue));
+        size_t xLength = COORD_LENGTH;
+        CHECK_PRINT_RETURN_OPT(
+            "Failed to get x",
+            cbor_value_copy_byte_string(&keyValue, deviceXYBuf, &xLength,
+                                        NULL) == CborNoError);
+        CHECK_PRINT_RETURN_OPT("x length is not 32", xLength == COORD_LENGTH);
+        xSpanOpt = std::span<const uint8_t>(deviceXYBuf, xLength);
+      }
+
+      if (key == -3) {
+        CHECK_PRINT_RETURN_OPT("Failed to advance to y",
+                               cbor_value_advance(&keyValue) == CborNoError);
+        CHECK_PRINT_RETURN_OPT("y is not byte string",
+                               cbor_value_is_byte_string(&keyValue));
+        size_t yLength = COORD_LENGTH;
+
+        CHECK_PRINT_RETURN_OPT(
+            "Failed to get y",
+            cbor_value_copy_byte_string(&keyValue, deviceXYBuf + COORD_LENGTH,
+                                        &yLength, NULL) == CborNoError);
+        CHECK_PRINT_RETURN_OPT("y length is not 32", yLength == COORD_LENGTH);
+        ySpanOpt =
+            std::span<const uint8_t>(deviceXYBuf + COORD_LENGTH, yLength);
+      }
+    }
+
+    CHECK_PRINT_RETURN_OPT("Failed to advance",
+                           cbor_value_advance(&keyValue) == CborNoError);
+  }
+  CHECK_PRINT_RETURN_OPT("Failed to get x or y",
+                         xSpanOpt.has_value() && ySpanOpt.has_value());
+
+  // TODO: also need to return full handover response to be used by the
+  // caller for encryption stuff
   if (pAdvertising) {
     pAdvertising->start();
   } else {
-    ESP_LOGE(TAG,
-             "Tried to start advertising, but advertising is not initialized");
+    ESP_LOGE(TAG, "Tried to start advertising, but advertising is not "
+                  "initialized");
   }
 
-  Crypto::test();
+  printHex("Device XY: ",
+           std::span<const uint8_t>(deviceXYBuf, COORD_LENGTH * 2));
+  Crypto::test(std::span<const uint8_t>(deviceXYBuf, COORD_LENGTH * 2));
 
   return readerPublicKeySpan;
 }

@@ -12,7 +12,7 @@ int errorCode;
 
 namespace Crypto {
 
-bool test() {
+bool test(std::span<const uint8_t> deviceXY) {
   CHECK_PRINT_RETURN_BOOL("Unable to init crypto",
                           psa_crypto_init() == PSA_SUCCESS);
 
@@ -40,12 +40,17 @@ bool test() {
       "Failed to load group",
       mbedtls_mpi_read_string(&keypair.private_d, 16, priv_hex));
 
+  // 5. Load the public key
+  // ASSERT_CODE_PRINT_RETURN_BOOL(
+  //     "Failed to create public key",
+  //     mbedtls_ecp_point_read_string(
+  //         &keypair.private_Q, 16,
+  //         "65b896331da50332029c967c5802943d2068d5f9dc0886953f9c22f756f7cc59",
+  //         "0ca8e45d3b2812cd1b9d1047598f5e0b29464c270d0bf7302292010c6782a0f6"));
   ASSERT_CODE_PRINT_RETURN_BOOL(
       "Failed to create public key",
-      mbedtls_ecp_point_read_string(
-          &keypair.private_Q, 16,
-          "65b896331da50332029c967c5802943d2068d5f9dc0886953f9c22f756f7cc59",
-          "0ca8e45d3b2812cd1b9d1047598f5e0b29464c270d0bf7302292010c6782a0f6"));
+      mbedtls_ecp_point_read_binary(&keypair.private_grp, &keypair.private_Q,
+                                    deviceXY.data(), deviceXY.size()));
 
   // 6. Validate the keys (Optional but good practice)
   ASSERT_CODE_PRINT_RETURN_BOOL(
