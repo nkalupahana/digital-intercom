@@ -58,7 +58,17 @@ uint8_t rbuf[PN532_PACKBUFFSIZ];
 // TODO: really, only one buffer is needed, with two spans.
 uint8_t encodedDevicePublicKeyBuf[PN532_PACKBUFFSIZ];
 uint8_t devicePublicKeyBuf[PN532_PACKBUFFSIZ];
-//
+// Generated via tools/ble-server, originally from spec example
+// TODO: switch to auto-generation
+uint8_t encodedReaderPublicKey[] = {
+    0xa4, 0x01, 0x02, 0x20, 0x01, 0x21, 0x58, 0x20, 0x60, 0xe3, 0x39,
+    0x23, 0x85, 0x04, 0x1f, 0x51, 0x40, 0x30, 0x51, 0xf2, 0x41, 0x55,
+    0x31, 0xcb, 0x56, 0xdd, 0x3f, 0x99, 0x9c, 0x71, 0x68, 0x70, 0x13,
+    0xaa, 0xc6, 0x76, 0x8b, 0xc8, 0x18, 0x7e, 0x22, 0x58, 0x20, 0xe5,
+    0x8d, 0xeb, 0x8f, 0xdb, 0xe9, 0x07, 0xf7, 0xdd, 0x53, 0x68, 0x24,
+    0x55, 0x51, 0xa3, 0x47, 0x96, 0xf7, 0xd2, 0x21, 0x5c, 0x44, 0x0c,
+    0x33, 0x9b, 0xb0, 0xf7, 0xb6, 0x7b, 0xec, 0xcd, 0xfa};
+uint8_t sessionTranscriptBuf[PN532_PACKBUFFSIZ * 3];
 constexpr size_t COORD_LENGTH = 32;
 uint8_t deviceXYPubKeyEncodedBuf[COORD_LENGTH * 2 + 1];
 std::span<uint8_t> devicePubKeyX{deviceXYPubKeyEncodedBuf + 1, COORD_LENGTH};
@@ -457,6 +467,58 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   }
   CHECK_PRINT_RETURN_OPT("Failed to get x or y",
                          xSpanOpt.has_value() && ySpanOpt.has_value());
+  /// Transcript
+  CborEncoder transcriptEncoder;
+  cbor_encoder_init(&transcriptEncoder, sessionTranscriptBuf,
+                    sizeof(sessionTranscriptBuf), 0);
+  CborEncoder arrayEncoder;
+  CHECK_PRINT_RETURN_OPT("Failed to create array",
+                         cbor_encoder_create_array(&transcriptEncoder,
+                                                   &arrayEncoder,
+                                                   3) == CborNoError);
+  // 1: Device engagement
+  CHECK_PRINT_RETURN_OPT("Failed to add tag",
+                         cbor_encode_tag(&arrayEncoder, 24) == CborNoError);
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add device engagement",
+      cbor_encode_byte_string(&arrayEncoder, encodedDeviceEngagementSpan.data(),
+                              encodedDeviceEngagementSpan.size()) ==
+          CborNoError);
+  // 2: Reader public key
+  CHECK_PRINT_RETURN_OPT("Failed to add tag",
+                         cbor_encode_tag(&arrayEncoder, 24) == CborNoError);
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add reader public key",
+      cbor_encode_byte_string(&arrayEncoder, encodedReaderPublicKey,
+                              sizeof(encodedReaderPublicKey)) == CborNoError);
+  // 3: Handover array
+  CborEncoder handoverArrayEncoder;
+  CHECK_PRINT_RETURN_OPT("Failed to add handover array",
+                         cbor_encoder_create_array(&arrayEncoder,
+                                                   &handoverArrayEncoder,
+                                                   2) == CborNoError);
+  // 3a: Handover select (incorrectly named handover response, TODO fix)
+  CHECK_PRINT_RETURN_OPT("Failed to add handover select",
+                         cbor_encode_byte_string(
+                             &handoverArrayEncoder, handoverResponseSpan.data(),
+                             handoverResponseSpan.size()) == CborNoError);
+  // 3b: Handover request
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add handover request",
+      cbor_encode_byte_string(&handoverArrayEncoder, handoverRequestSpan.data(),
+                              handoverRequestSpan.size()) == CborNoError);
+  // Close containers
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to close handover array",
+      cbor_encoder_close_container(&arrayEncoder, &handoverArrayEncoder) ==
+          CborNoError);
+  CHECK_PRINT_RETURN_OPT("Failed to close array",
+                         cbor_encoder_close_container(
+                             &transcriptEncoder, &arrayEncoder) == CborNoError);
+  std::span<const uint8_t> transcriptSpan(
+      sessionTranscriptBuf,
+      cbor_encoder_get_buffer_size(&transcriptEncoder, sessionTranscriptBuf));
+  printHex("Transcript: ", transcriptSpan);
 
   // TODO: also need to return full handover response to be used by the
   // caller for encryption stuff
