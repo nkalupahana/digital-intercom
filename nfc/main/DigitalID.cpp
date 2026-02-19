@@ -1,6 +1,7 @@
 #include "Crypto.h"
 #include "NFC.h"
 #include "NdefMessage.h"
+#include "NimBLEAttValue.h"
 #include "NimBLECharacteristic.h"
 #include "NimBLELocalValueAttribute.h"
 #include "NimBLEServer.h"
@@ -43,6 +44,13 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
     Serial.println("Subscribed!");
     NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
                                                subValue);
+  };
+  void onWrite(NimBLECharacteristic *pCharacteristic,
+               NimBLEConnInfo &connInfo) override {
+    NimBLEAttValue value = pCharacteristic->getValue();
+    printHex("Received value to state characteristic: ",
+             {value.data(), value.length()});
+    NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
 } stateCharacteristicCallbacks;
 
