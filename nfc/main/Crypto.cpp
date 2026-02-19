@@ -1,3 +1,4 @@
+#include "NimBLECharacteristic.h"
 #include "errors.h"
 #include "utils.h"
 #include <cstdint>
@@ -158,7 +159,7 @@ bool test(std::span<const uint8_t> deviceXY) {
           &gcmCtx, MBEDTLS_GCM_ENCRYPT, sizeof(requestToEncrypt), iv,
           sizeof(iv), &ad, 0, requestToEncrypt, encrypted, sizeof(tag), tag));
 
-  mbedtls_mpi_write_file("Shared ", &sharedSecret, 16, NULL);
+  Serial.printf("Shared Secret: %d\n", sharedSecret.private_n);
   printHex("HKDF Output ", {hkdfOutput, sizeof(hkdfOutput)});
   printHex("Encrypted Output ", {encrypted, sizeof(encrypted)});
 
@@ -170,5 +171,20 @@ bool test(std::span<const uint8_t> deviceXY) {
   //   // 7. Free memory when done
   //   mbedtls_ecp_keypair_free(&keypair);
   //   return true;
+}
+
+bool setIdent(NimBLECharacteristic *identCharacteristic,
+              std::span<const uint8_t> encodedDevicePublicKey) {
+  uint8_t hkdfOutput[16];
+  const uint8_t info[] = "BLEIdent";
+  const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  ASSERT_CODE_PRINT_RETURN_BOOL(
+      "Failed to HKDF", mbedtls_hkdf(md, {}, 0, encodedDevicePublicKey.data(),
+                                     encodedDevicePublicKey.size(), info, 8,
+                                     hkdfOutput, sizeof(hkdfOutput)));
+  printHex("Ident: ", {hkdfOutput, sizeof(hkdfOutput)});
+  identCharacteristic->setValue(hkdfOutput, sizeof(hkdfOutput));
+
+  return true;
 }
 } // namespace Crypto

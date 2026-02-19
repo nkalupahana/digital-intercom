@@ -47,7 +47,10 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 } stateCharacteristicCallbacks;
 
 uint8_t rbuf[PN532_PACKBUFFSIZ];
-uint8_t readerPublicKeyBuf[PN532_PACKBUFFSIZ];
+// TODO: really, only one buffer is needed, with two spans.
+uint8_t encodedDevicePublicKeyBuf[PN532_PACKBUFFSIZ];
+uint8_t devicePublicKeyBuf[PN532_PACKBUFFSIZ];
+//
 constexpr size_t COORD_LENGTH = 32;
 uint8_t deviceXYPubKeyEncodedBuf[COORD_LENGTH * 2 + 1];
 std::span<uint8_t> devicePubKeyX{deviceXYPubKeyEncodedBuf + 1, COORD_LENGTH};
@@ -307,6 +310,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   auto encodedDeviceEngagementSpan = *encodedDeviceEngagementOpt;
   printHex("Encoded device engagement: ", encodedDeviceEngagementSpan);
 
+  // Get public key out of device engagement
   CborParser parser;
   CborValue value;
   CHECK_PRINT_RETURN_OPT("CBOR parser fialed to initialize",
@@ -348,36 +352,55 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   CHECK_PRINT_RETURN_OPT("Cipher suite identifier is not 1, which is the only "
                          "identifier we know about",
                          cipherSuiteIdentifier == 1);
-  CHECK_PRINT_RETURN_OPT("Failed to advance to tagged reader public key",
+  CHECK_PRINT_RETURN_OPT("Failed to advance to tagged device public key",
                          cbor_value_advance(&value) == CborNoError);
-  CHECK_PRINT_RETURN_OPT("Tagged reader public key is not tagged",
+  CHECK_PRINT_RETURN_OPT("Tagged device public key is not tagged",
                          cbor_value_is_tag(&value));
-  CborTag readerPublicKeyTag;
-  CHECK_PRINT_RETURN_OPT("Failed to get reader public key tag",
-                         cbor_value_get_tag(&value, &readerPublicKeyTag) ==
+  CborTag devicePublicKeyTag;
+  CHECK_PRINT_RETURN_OPT("Failed to get device public key tag",
+                         cbor_value_get_tag(&value, &devicePublicKeyTag) ==
                              CborNoError);
-  CHECK_PRINT_RETURN_OPT("Reader public key tag is not 24",
-                         readerPublicKeyTag == 24);
-  CHECK_PRINT_RETURN_OPT("Failed to advance to reader public key",
+  CHECK_PRINT_RETURN_OPT("device public key tag is not 24",
+                         devicePublicKeyTag == 24);
+  CHECK_PRINT_RETURN_OPT("Failed to advance to device public key",
                          cbor_value_advance(&value) == CborNoError);
-  CHECK_PRINT_RETURN_OPT("Reader public key is not byte string",
+  CHECK_PRINT_RETURN_OPT("device public key is not byte string",
                          cbor_value_is_byte_string(&value));
-  size_t readerPublicKeyLength = PN532_PACKBUFFSIZ;
-  CHECK_PRINT_RETURN_OPT("Failed to get reader public key",
-                         cbor_value_copy_byte_string(&value, readerPublicKeyBuf,
-                                                     &readerPublicKeyLength,
+  size_t devicePublicKeyLength = PN532_PACKBUFFSIZ;
+  CHECK_PRINT_RETURN_OPT("Failed to get device public key",
+                         cbor_value_copy_byte_string(&value, devicePublicKeyBuf,
+                                                     &devicePublicKeyLength,
                                                      &value) == CborNoError);
-  std::span<const uint8_t> readerPublicKeySpan(readerPublicKeyBuf,
-                                               readerPublicKeyLength);
-  printHex("Reader public key: ", readerPublicKeySpan);
+  std::span<const uint8_t> devicePublicKeySpan(devicePublicKeyBuf,
+                                               devicePublicKeyLength);
+  printHex("device public key: ", devicePublicKeySpan);
 
+  // Write extracted public key back to CBOR, with tag
+  // This could definintely be improved.
+  CborEncoder encoder;
+  cbor_encoder_init(&encoder, encodedDevicePublicKeyBuf, PN532_PACKBUFFSIZ, 0);
+  CHECK_PRINT_RETURN_OPT("Failed to encode device public key",
+                         cbor_encode_tag(&encoder, devicePublicKeyTag) ==
+                             CborNoError);
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to encode device public key",
+      cbor_encode_byte_string(&encoder, devicePublicKeySpan.data(),
+                              devicePublicKeySpan.size()) == CborNoError);
+  std::span<const uint8_t> encodedDevicePublicKeySpan(
+      encodedDevicePublicKeyBuf,
+      cbor_encoder_get_buffer_size(&encoder, encodedDevicePublicKeyBuf));
+  printHex("Encoded device public key: ", encodedDevicePublicKeySpan);
+
+  Crypto::setIdent(identCharacteristic, encodedDevicePublicKeySpan);
+
+  // Extract x and y from the device public key
   CborParser keyParser;
   CborValue keyValue;
   std::optional<std::span<const uint8_t>> xSpanOpt = std::nullopt;
   std::optional<std::span<const uint8_t>> ySpanOpt = std::nullopt;
   CHECK_PRINT_RETURN_OPT(
-      "CBOR parser fialed to initialize",
-      cbor_parser_init(readerPublicKeySpan.data(), readerPublicKeySpan.size(),
+      "CBOR parser failed to initialize",
+      cbor_parser_init(devicePublicKeySpan.data(), devicePublicKeySpan.size(),
                        0, &keyParser, &keyValue) == CborNoError);
   CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&keyValue));
   CHECK_PRINT_RETURN_OPT("Failed to enter map",
@@ -437,9 +460,9 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   }
 
   printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
-  Crypto::test({deviceXYPubKeyEncodedBuf});
+  // Crypto::test({deviceXYPubKeyEncodedBuf});
 
-  return readerPublicKeySpan;
+  return std::nullopt;
 }
 
 void setupBLEServer() {
