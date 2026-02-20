@@ -13,8 +13,23 @@
 int errorCode;
 
 namespace Crypto {
+// Generated via tools/ble-server/item-request.js
+uint8_t unencryptedRequest[] = {
+    0xa2, 0x67, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x63, 0x31, 0x2e,
+    0x30, 0x6b, 0x64, 0x6f, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+    0x73, 0x81, 0xa1, 0x6c, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x52, 0x65, 0x71,
+    0x75, 0x65, 0x73, 0x74, 0xd8, 0x18, 0x58, 0x63, 0xa2, 0x67, 0x64, 0x6f,
+    0x63, 0x54, 0x79, 0x70, 0x65, 0x75, 0x6f, 0x72, 0x67, 0x2e, 0x69, 0x73,
+    0x6f, 0x2e, 0x31, 0x38, 0x30, 0x31, 0x33, 0x2e, 0x35, 0x2e, 0x31, 0x2e,
+    0x6d, 0x44, 0x4c, 0x6a, 0x6e, 0x61, 0x6d, 0x65, 0x53, 0x70, 0x61, 0x63,
+    0x65, 0x73, 0xa1, 0x71, 0x6f, 0x72, 0x67, 0x2e, 0x69, 0x73, 0x6f, 0x2e,
+    0x31, 0x38, 0x30, 0x31, 0x33, 0x2e, 0x35, 0x2e, 0x31, 0xa3, 0x6a, 0x67,
+    0x69, 0x76, 0x65, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0xf5, 0x6b, 0x66,
+    0x61, 0x6d, 0x69, 0x6c, 0x79, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0xf5, 0x6a,
+    0x62, 0x69, 0x72, 0x74, 0x68, 0x5f, 0x64, 0x61, 0x74, 0x65, 0xf5};
 
-bool test(std::span<const uint8_t> deviceXY) {
+bool test(std::span<const uint8_t> deviceXY,
+          std::span<const uint8_t> transcript) {
   CHECK_PRINT_RETURN_BOOL("Unable to init crypto",
                           psa_crypto_init() == PSA_SUCCESS);
 
@@ -75,92 +90,39 @@ bool test(std::span<const uint8_t> deviceXY) {
       "Failed to write shared secret to buffer",
       mbedtls_mpi_write_binary(&sharedSecret, sharedSecretBuf,
                                sizeof(sharedSecretBuf)));
-  uint8_t hkdfOutput[32];
-  const uint8_t salt[] = {
-      216, 24,  89,  3,   25,  131, 216, 24,  120, 192, 65,  52,  48,  48,  54,
-      51,  51,  49,  50,  69,  51,  49,  48,  49,  56,  50,  48,  49,  68,  56,
-      49,  56,  53,  56,  52,  66,  65,  52,  48,  49,  48,  50,  50,  48,  48,
-      49,  50,  49,  53,  56,  50,  48,  54,  53,  66,  56,  57,  54,  51,  51,
-      49,  68,  65,  53,  48,  51,  51,  50,  48,  50,  57,  67,  57,  54,  55,
-      67,  53,  56,  48,  50,  57,  52,  51,  68,  50,  48,  54,  56,  68,  53,
-      70,  57,  68,  67,  48,  56,  56,  54,  57,  53,  51,  70,  57,  67,  50,
-      50,  70,  55,  53,  54,  70,  55,  67,  67,  53,  57,  50,  50,  53,  56,
-      50,  48,  48,  67,  65,  56,  69,  52,  53,  68,  51,  66,  50,  56,  49,
-      50,  67,  68,  49,  66,  57,  68,  49,  48,  52,  55,  53,  57,  56,  70,
-      53,  69,  48,  66,  50,  57,  52,  54,  52,  67,  50,  55,  48,  68,  48,
-      66,  70,  55,  51,  48,  50,  50,  57,  50,  48,  49,  48,  67,  54,  55,
-      56,  50,  65,  48,  70,  54,  48,  53,  56,  48,  48,  54,  65,  50,  48,
-      51,  70,  53,  48,  52,  70,  53,  216, 24,  88,  75,  164, 1,   2,   32,
-      1,   33,  88,  32,  96,  227, 57,  35,  133, 4,   31,  81,  64,  48,  81,
-      242, 65,  85,  49,  203, 86,  221, 63,  153, 156, 113, 104, 112, 19,  170,
-      198, 118, 139, 200, 24,  126, 34,  88,  32,  229, 141, 235, 143, 219, 233,
-      7,   247, 221, 83,  104, 36,  85,  81,  163, 71,  150, 247, 210, 33,  92,
-      68,  12,  51,  155, 176, 247, 182, 123, 236, 205, 250, 130, 121, 1,   132,
-      57,  49,  48,  50,  48,  70,  52,  56,  55,  51,  49,  53,  68,  49,  48,
-      50,  48,  57,  54,  49,  54,  51,  48,  49,  48,  49,  51,  48,  48,  49,
-      48,  52,  54,  68,  54,  52,  54,  70,  54,  51,  49,  65,  50,  48,  48,
-      51,  48,  49,  54,  49,  55,  48,  55,  48,  54,  67,  54,  57,  54,  51,
-      54,  49,  55,  52,  54,  57,  54,  70,  54,  69,  50,  70,  55,  54,  54,
-      69,  54,  52,  50,  69,  54,  50,  54,  67,  55,  53,  54,  53,  55,  52,
-      54,  70,  54,  70,  55,  52,  54,  56,  50,  69,  54,  67,  54,  53,  50,
-      69,  54,  70,  54,  70,  54,  50,  51,  48,  48,  50,  49,  67,  48,  49,
-      53,  67,  49,  69,  54,  48,  48,  52,  54,  57,  55,  51,  54,  70,  50,
-      69,  54,  70,  55,  50,  54,  55,  51,  65,  51,  49,  51,  56,  51,  48,
-      51,  49,  51,  51,  51,  65,  54,  52,  54,  53,  55,  54,  54,  57,  54,
-      51,  54,  53,  54,  53,  54,  69,  54,  55,  54,  49,  54,  55,  54,  53,
-      54,  68,  54,  53,  54,  69,  55,  52,  54,  68,  54,  52,  54,  70,  54,
-      51,  65,  52,  48,  48,  54,  51,  51,  49,  50,  69,  51,  49,  48,  49,
-      56,  50,  48,  49,  68,  56,  49,  56,  53,  56,  52,  66,  65,  52,  48,
-      49,  48,  50,  50,  48,  48,  49,  50,  49,  53,  56,  50,  48,  54,  53,
-      66,  56,  57,  54,  51,  51,  49,  68,  65,  53,  48,  51,  51,  50,  48,
-      50,  57,  67,  57,  54,  55,  67,  53,  56,  48,  50,  57,  52,  51,  68,
-      50,  48,  54,  56,  68,  53,  70,  57,  68,  67,  48,  56,  56,  54,  57,
-      53,  51,  70,  57,  67,  50,  50,  70,  55,  53,  54,  70,  55,  67,  67,
-      53,  57,  50,  50,  53,  56,  50,  48,  48,  67,  65,  56,  69,  52,  53,
-      68,  51,  66,  50,  56,  49,  50,  67,  68,  49,  66,  57,  68,  49,  48,
-      52,  55,  53,  57,  56,  70,  53,  69,  48,  66,  50,  57,  52,  54,  52,
-      67,  50,  55,  48,  68,  48,  66,  70,  55,  51,  48,  50,  50,  57,  50,
-      48,  49,  48,  67,  54,  55,  56,  50,  65,  48,  70,  54,  48,  53,  56,
-      48,  48,  54,  65,  50,  48,  51,  70,  53,  48,  52,  70,  53,  88,  123,
-      145, 2,   10,  72,  114, 21,  209, 2,   4,   97,  99,  1,   1,   48,  0,
-      28,  30,  6,   10,  105, 115, 111, 46,  111, 114, 103, 58,  49,  56,  48,
-      49,  51,  58,  114, 101, 97,  100, 101, 114, 101, 110, 103, 97,  103, 101,
-      109, 101, 110, 116, 109, 100, 111, 99,  114, 101, 97,  100, 101, 114, 161,
-      0,   99,  49,  46,  48,  90,  32,  21,  1,   97,  112, 112, 108, 105, 99,
-      97,  116, 105, 111, 110, 47,  118, 110, 100, 46,  98,  108, 117, 101, 116,
-      111, 111, 116, 104, 46,  108, 101, 46,  111, 111, 98,  48,  2,   28,  0,
-      17,  7,   164, 178, 49,  210, 148, 105, 11,  169, 249, 79,  60,  9,   64,
-      96,  24,  130};
-  const uint8_t info[] = "SKReader";
+  uint8_t readerKey[32];
+  const uint8_t readerInfo[] = "SKReader";
   const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
   ASSERT_CODE_PRINT_RETURN_BOOL(
-      "Failed to HKDF", mbedtls_hkdf(md, salt, sizeof(salt), sharedSecretBuf,
-                                     sizeof(sharedSecretBuf), info, 8,
-                                     hkdfOutput, sizeof(hkdfOutput)));
+      "Failed to HKDF reader key",
+      mbedtls_hkdf(md, transcript.data(), transcript.size(), sharedSecretBuf,
+                   sizeof(sharedSecretBuf), readerInfo, 8, readerKey,
+                   sizeof(readerKey)));
+  printHex("Reader Key: ", {readerKey, sizeof(readerKey)});
+  uint8_t deviceKey[32];
+  const uint8_t deviceInfo[] = "SKDevice";
+  ASSERT_CODE_PRINT_RETURN_BOOL(
+      "Failed to HKDF device key",
+      mbedtls_hkdf(md, transcript.data(), transcript.size(), sharedSecretBuf,
+                   sizeof(sharedSecretBuf), deviceInfo, 8, deviceKey,
+                   sizeof(deviceKey)));
+  printHex("Device Key: ", {deviceKey, sizeof(deviceKey)});
 
   esp_gcm_context gcmCtx;
   mbedtls_gcm_init(&gcmCtx);
-  uint8_t requestToEncrypt[] = {
-      162, 103, 100, 111, 99,  84,  121, 112, 101, 117, 111, 114, 103, 46,  105,
-      115, 111, 46,  49,  56,  48,  49,  51,  46,  53,  46,  49,  46,  109, 68,
-      76,  106, 110, 97,  109, 101, 83,  112, 97,  99,  101, 115, 161, 113, 111,
-      114, 103, 46,  105, 115, 111, 46,  49,  56,  48,  49,  51,  46,  53,  46,
-      49,  161, 106, 103, 105, 118, 101, 110, 95,  110, 97,  109, 101, 245};
   uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
   ASSERT_CODE_PRINT_RETURN_BOOL(
       "Failed to set key",
-      mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, hkdfOutput, 256));
+      mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, readerKey, 256));
   uint8_t encrypted[255];
   uint8_t tag[16];
   uint8_t ad;
   ASSERT_CODE_PRINT_RETURN_BOOL(
       "Failed to encrypt",
       mbedtls_gcm_crypt_and_tag(
-          &gcmCtx, MBEDTLS_GCM_ENCRYPT, sizeof(requestToEncrypt), iv,
-          sizeof(iv), &ad, 0, requestToEncrypt, encrypted, sizeof(tag), tag));
+          &gcmCtx, MBEDTLS_GCM_ENCRYPT, sizeof(unencryptedRequest), iv,
+          sizeof(iv), &ad, 0, unencryptedRequest, encrypted, sizeof(tag), tag));
 
-  Serial.printf("Shared Secret: %d\n", sharedSecret.private_n);
-  printHex("HKDF Output ", {hkdfOutput, sizeof(hkdfOutput)});
   printHex("Encrypted Output ", {encrypted, sizeof(encrypted)});
 
   return true;

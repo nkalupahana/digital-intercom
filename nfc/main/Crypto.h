@@ -7,5 +7,6 @@
 namespace Crypto {
 bool setIdent(NimBLECharacteristic *identCharacteristic,
               std::span<const uint8_t> encodedDevicePublicKey);
-bool test(std::span<const uint8_t> deviceXY);
+bool test(std::span<const uint8_t> deviceXY,
+          std::span<const uint8_t> transcript);
 } // namespace Crypto

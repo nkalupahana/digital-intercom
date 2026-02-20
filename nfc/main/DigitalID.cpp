@@ -547,7 +547,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   }
 
   printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
-  // Crypto::test({deviceXYPubKeyEncodedBuf});
+  Crypto::test({deviceXYPubKeyEncodedBuf}, transcriptSpan);
 
   return std::nullopt;
 }
