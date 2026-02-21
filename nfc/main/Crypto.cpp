@@ -15,11 +15,12 @@
 namespace Crypto {
 uint8_t encryptedRequestBuf[REQUEST_SIZE];
 mbedtls_entropy_context entropyCtx;
-mbedtls_ecp_group group;
-mbedtls_mpi readerPrivateKey;
+mbedtls_ecp_keypair readerKeypair;
 mbedtls_ecp_point devicePublicKey;
 mbedtls_mpi sharedSecret;
 esp_gcm_context gcmCtx;
+
+mbedtls_ecp_group *group = &readerKeypair.MBEDTLS_PRIVATE(grp);
 
 void setup() {
   // TODO: Check if we need this
@@ -28,36 +29,60 @@ void setup() {
     errorHang();
   }
   mbedtls_entropy_init(&entropyCtx);
-  mbedtls_ecp_group_init(&group);
-  if (int errorCode =
-          mbedtls_ecp_group_load(&group, MBEDTLS_ECP_DP_SECP256R1) != 0) {
-    ESP_LOGE(TAG, "Failed to load group - Code: %x", -errorCode);
-    errorHang();
-  }
-  mbedtls_mpi_init(&readerPrivateKey);
+  mbedtls_ecp_keypair_init(&readerKeypair);
   mbedtls_ecp_point_init(&devicePublicKey);
   mbedtls_mpi_init(&sharedSecret);
   mbedtls_gcm_init(&gcmCtx);
 }
 
+bool generateNewReaderKeypair() {
+  CHECK_CRYPTO_RETURN_BOOL(
+      "Failed to generate readerKeypair",
+      mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, &readerKeypair,
+                          &mbedtls_entropy_func, &entropyCtx));
+
+  return true;
+}
+
+std::optional<
+    std::pair<std::span<const uint8_t, 32>, std::span<const uint8_t, 32>>>
+copyReaderPublicKeyPoints() {
+  // The first byte is 0x04 to indicate uncompressed and each each point is 32
+  // bytes
+  static uint8_t buf[65];
+  size_t outputLen;
+  CHECK_CRYPTO_RETURN_OPT(
+      "Failed to copy readerPublicKeyPoints into buf",
+      mbedtls_ecp_point_write_binary(group, &readerKeypair.MBEDTLS_PRIVATE(Q),
+                                     MBEDTLS_ECP_PF_UNCOMPRESSED, &outputLen,
+                                     buf, sizeof(buf)));
+  if (outputLen != sizeof(buf)) {
+    ESP_LOGE(TAG, "Unexpected readerPublicKeyPoints len: %d", outputLen);
+    return std::nullopt;
+  }
+
+  std::span<const uint8_t, 32> xSpan{buf + 1, 32};
+  std::span<const uint8_t, 32> ySpan{buf + 1 + 32, 32};
+  return std::pair{xSpan, ySpan};
+
+  return std::nullopt;
+}
+
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                          std::span<const uint8_t> transcript) {
-  CHECK_CRYPTO_RETURN_OPT("Failed to generate readerPrivateKey",
-                          mbedtls_ecp_gen_privkey(&group, &readerPrivateKey,
-                                                  &mbedtls_entropy_func,
-                                                  &entropyCtx));
-  CHECK_CRYPTO_RETURN_OPT(
-      "Failed to read devicePublicKey",
-      mbedtls_ecp_point_read_binary(&group, &devicePublicKey, deviceXY.data(),
-                                    deviceXY.size()));
+
+  CHECK_CRYPTO_RETURN_OPT("Failed to read devicePublicKey",
+                          mbedtls_ecp_point_read_binary(group, &devicePublicKey,
+                                                        deviceXY.data(),
+                                                        deviceXY.size()));
   CHECK_CRYPTO_RETURN_OPT("Invalid devicePublicKey",
-                          mbedtls_ecp_check_pubkey(&group, &devicePublicKey));
+                          mbedtls_ecp_check_pubkey(group, &devicePublicKey));
   CHECK_CRYPTO_RETURN_OPT(
       "Failed to computed shared secret",
-      mbedtls_ecdh_compute_shared(&group, &sharedSecret, &devicePublicKey,
-                                  &readerPrivateKey, &mbedtls_entropy_func,
-                                  &entropyCtx));
+      mbedtls_ecdh_compute_shared(group, &sharedSecret, &devicePublicKey,
+                                  &readerKeypair.MBEDTLS_PRIVATE(d),
+                                  &mbedtls_entropy_func, &entropyCtx));
 
   static uint8_t sharedSecretBuf[32];
   CHECK_CRYPTO_RETURN_OPT("Failed to write shared secret to buffer",

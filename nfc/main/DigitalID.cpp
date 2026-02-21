@@ -103,15 +103,6 @@ uint8_t rbuf[PN532_PACKBUFFSIZ];
 uint8_t encodedDevicePublicKeyBuf[PN532_PACKBUFFSIZ];
 uint8_t devicePublicKeyBuf[PN532_PACKBUFFSIZ];
 // Generated via tools/ble-server, originally from spec example
-// TODO: switch to auto-generation
-uint8_t encodedReaderPublicKey[] = {
-    0xa4, 0x01, 0x02, 0x20, 0x01, 0x21, 0x58, 0x20, 0x60, 0xe3, 0x39,
-    0x23, 0x85, 0x04, 0x1f, 0x51, 0x40, 0x30, 0x51, 0xf2, 0x41, 0x55,
-    0x31, 0xcb, 0x56, 0xdd, 0x3f, 0x99, 0x9c, 0x71, 0x68, 0x70, 0x13,
-    0xaa, 0xc6, 0x76, 0x8b, 0xc8, 0x18, 0x7e, 0x22, 0x58, 0x20, 0xe5,
-    0x8d, 0xeb, 0x8f, 0xdb, 0xe9, 0x07, 0xf7, 0xdd, 0x53, 0x68, 0x24,
-    0x55, 0x51, 0xa3, 0x47, 0x96, 0xf7, 0xd2, 0x21, 0x5c, 0x44, 0x0c,
-    0x33, 0x9b, 0xb0, 0xf7, 0xb6, 0x7b, 0xec, 0xcd, 0xfa};
 // Generated via tools/multipaz-sandbox
 uint8_t handoverRequestBuf[] = {
     0x91, 0x02, 0x0A, 0x48, 0x72, 0x15, 0xD1, 0x02, 0x04, 0x61, 0x63, 0x01,
@@ -125,8 +116,7 @@ uint8_t handoverRequestBuf[] = {
     0x65, 0x2E, 0x6F, 0x6F, 0x62, 0x30, 0x02, 0x1C, 0x00, 0x11, 0x07, 0xA4,
     0xB2, 0x31, 0xD2, 0x94, 0x69, 0x0B, 0xA9, 0xF9, 0x4F, 0x3C, 0x09, 0x40,
     0x60, 0x18, 0x82};
-uint8_t
-    fullRequestBuf[Crypto::REQUEST_SIZE + sizeof(encodedReaderPublicKey) + 32];
+uint8_t fullRequestBuf[Crypto::REQUEST_SIZE + 100];
 auto handoverRequestSpan =
     std::span<const uint8_t>(handoverRequestBuf, sizeof(handoverRequestBuf));
 uint8_t sessionTranscriptBuf[PN532_PACKBUFFSIZ * 3];
@@ -205,6 +195,43 @@ bool checkIfValid() {
       NFC::exchangeData("Sending SELECT NDEF: ", writeSlice.span(), rbuf);
 
   return data.has_value();
+}
+
+bool encodeReaderPublicKey(CborEncoder *encoder) {
+  CborEncoder mapEncoder;
+  CHECK_CBOR_RETURN_BOOL("Failed to create map",
+                         cbor_encoder_create_map(encoder, &mapEncoder, 4));
+
+  CHECK_CBOR_RETURN_BOOL("Failed to add key 1",
+                         cbor_encode_int(&mapEncoder, 1));
+  CHECK_CBOR_RETURN_BOOL("Failed to add value 2 for key 1",
+                         cbor_encode_int(&mapEncoder, 2));
+
+  CHECK_CBOR_RETURN_BOOL("Failed to add key -1",
+                         cbor_encode_negative_int(&mapEncoder, 1));
+  CHECK_CBOR_RETURN_BOOL("Failed to add value 1 for key -1",
+                         cbor_encode_int(&mapEncoder, 1));
+
+  auto readerPublicKeyPointsOpt = Crypto::copyReaderPublicKeyPoints();
+  CHECK_RETURN_BOOL(readerPublicKeyPointsOpt);
+  const auto &[xSpan, ySpan] = *readerPublicKeyPointsOpt;
+
+  CHECK_CBOR_RETURN_BOOL("Failed to add key -2",
+                         cbor_encode_negative_int(&mapEncoder, 2));
+  CHECK_CBOR_RETURN_BOOL(
+      "Failed to add value for key -2",
+      cbor_encode_byte_string(&mapEncoder, xSpan.data(), xSpan.size()));
+
+  CHECK_CBOR_RETURN_BOOL("Failed to add key -3",
+                         cbor_encode_negative_int(&mapEncoder, 2));
+  CHECK_CBOR_RETURN_BOOL(
+      "Failed to add value for key -3",
+      cbor_encode_byte_string(&mapEncoder, ySpan.data(), ySpan.size()));
+
+  CHECK_CBOR_RETURN_BOOL("Failed to close map",
+                         cbor_encoder_close_container(encoder, &mapEncoder));
+
+  return true;
 }
 
 std::optional<std::span<const uint8_t>> performHandoff() {
@@ -524,10 +551,8 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   // 2: Reader public key
   CHECK_CBOR_RETURN_OPT("Failed to add tag",
                         cbor_encode_tag(&arrayEncoder, 24));
-  CHECK_CBOR_RETURN_OPT(
-      "Failed to add reader public key",
-      cbor_encode_byte_string(&arrayEncoder, encodedReaderPublicKey,
-                              sizeof(encodedReaderPublicKey)));
+  CHECK_PRINT_RETURN_OPT("Failed to add reader public key",
+                         encodeReaderPublicKey(&arrayEncoder));
   // 3: Handover array
   CborEncoder handoverArrayEncoder;
   CHECK_CBOR_RETURN_OPT(
@@ -589,10 +614,8 @@ std::optional<std::span<const uint8_t>> performHandoff() {
       cbor_encode_text_string(&mapEncoder, readerKey, strlen(readerKey)));
   CHECK_CBOR_RETURN_OPT("Failed to add tag for reader public key",
                         cbor_encode_tag(&mapEncoder, 24));
-  CHECK_CBOR_RETURN_OPT(
-      "Failed to add reader public key",
-      cbor_encode_byte_string(&mapEncoder, encodedReaderPublicKey,
-                              sizeof(encodedReaderPublicKey)));
+  CHECK_PRINT_RETURN_OPT("Failed to add reader public key",
+                         encodeReaderPublicKey(&mapEncoder));
   auto dataKey = "data";
   CHECK_CBOR_RETURN_OPT(
       "Failed to add data key",

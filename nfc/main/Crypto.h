@@ -40,6 +40,11 @@ constexpr size_t REQUEST_SIZE = sizeof(unencryptedRequest) + TAG_SIZE;
 
 void setup();
 
+bool generateNewReaderKeypair();
+std::optional<
+    std::pair<std::span<const uint8_t, 32>, std::span<const uint8_t, 32>>>
+copyReaderPublicKeyPoints();
+
 bool setIdent(NimBLECharacteristic *identCharacteristic,
               std::span<const uint8_t> encodedDevicePublicKey);
 
