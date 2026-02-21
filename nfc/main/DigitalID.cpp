@@ -19,13 +19,13 @@
 namespace DigitalID {
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override {
-    Serial.println("Connected!");
+    ESP_LOGI(TAG, "Connected!");
     NimBLEServerCallbacks::onConnect(pServer, connInfo);
   };
 
   void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo,
                     int reason) override {
-    Serial.println("Disconnected!");
+    ESP_LOGI(TAG, "Disconnected!");
     NimBLEServerCallbacks::onDisconnect(pServer, connInfo, reason);
   };
 } serverCallbacks;
@@ -33,7 +33,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 class IdentCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
   void onRead(NimBLECharacteristic *pCharacteristic,
               NimBLEConnInfo &connInfo) override {
-    Serial.println("Read!");
+    ESP_LOGI(TAG, "Read!");
     NimBLECharacteristicCallbacks::onRead(pCharacteristic, connInfo);
   };
 } identCharacteristicCallbacks;
@@ -52,7 +52,7 @@ private:
 
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
-    Serial.println("Subscribed!");
+    ESP_LOGI(TAG, "Subscribed!");
     NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
                                                subValue);
   };
@@ -79,8 +79,8 @@ class ServerToClientCharacteristicCallbacks
     : public NimBLECharacteristicCallbacks {
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
-    Serial.println("Subscribed to server to client characteristic!");
-    Serial.printf("Subvalue: %d\n", subValue);
+    ESP_LOGI(TAG, "Subscribed to server to client characteristic!");
+    ESP_LOGI(TAG, "Subvalue: %d\n", subValue);
     NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
                                                subValue);
   };
@@ -90,7 +90,7 @@ class ClientToServerCharacteristicCallbacks
     : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *pCharacteristic,
                NimBLEConnInfo &connInfo) override {
-    Serial.println("Write to client to server characteristic!");
+    ESP_LOGI(TAG, "Write to client to server characteristic!");
     printHex("Received value to client to server characteristic: ",
              {pCharacteristic->getValue().data(),
               pCharacteristic->getValue().length()});
