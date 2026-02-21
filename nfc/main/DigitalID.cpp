@@ -547,7 +547,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   // 1: Device engagement
   CHECK_CBOR_RETURN_OPT("Failed to add tag",
                         cbor_encode_tag(&arrayEncoder, 24));
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT(
       "Failed to add device engagement",
       cbor_encode_byte_string(&arrayEncoder, encodedDeviceEngagementSpan.data(),
                               encodedDeviceEngagementSpan.size()));
