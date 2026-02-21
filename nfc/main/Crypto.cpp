@@ -15,7 +15,9 @@
 namespace Crypto {
 uint8_t encryptedRequestBuf[REQUEST_SIZE];
 mbedtls_entropy_context entropyCtx;
-mbedtls_ecp_keypair keypair;
+mbedtls_ecp_group group;
+mbedtls_mpi readerPrivateKey;
+mbedtls_ecp_point devicePublicKey;
 mbedtls_mpi sharedSecret;
 esp_gcm_context gcmCtx;
 
@@ -26,7 +28,14 @@ void setup() {
     errorHang();
   }
   mbedtls_entropy_init(&entropyCtx);
-  mbedtls_ecp_keypair_init(&keypair);
+  mbedtls_ecp_group_init(&group);
+  if (int errorCode =
+          mbedtls_ecp_group_load(&group, MBEDTLS_ECP_DP_SECP256R1) != 0) {
+    ESP_LOGE(TAG, "Failed to load group - Code: %x", -errorCode);
+    errorHang();
+  }
+  mbedtls_mpi_init(&readerPrivateKey);
+  mbedtls_ecp_point_init(&devicePublicKey);
   mbedtls_mpi_init(&sharedSecret);
   mbedtls_gcm_init(&gcmCtx);
 }
@@ -34,47 +43,22 @@ void setup() {
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                          std::span<const uint8_t> transcript) {
-  // The private key hex string from your snippet
-  const char *priv_hex =
-      "de3b4b9e5f72dd9b58406ae3091434da48a6f9fd010d88fcb0958e2cebec947c";
-
-  // 3. Load the Curve (secp256r1 is MBEDTLS_ECP_DP_SECP256R1)
-  // This is equivalent to: const curve = ecdh.getCurve("secp256r1");
   ASSERT_CODE_PRINT_RETURN_OPT(
-      "Failed to load group",
-      mbedtls_ecp_group_load(&keypair.private_grp, MBEDTLS_ECP_DP_SECP256R1));
-
-  // TODO: Try using mbedtls_ecp_gen_key
-  // 4. Load the Private Key (d)
-  // This parses the hex string directly into the MPI (BigNum) structure
-  // Equivalent to: PrivateKey.fromBuffer(...)
+      "Failed to generate readerPrivateKey",
+      mbedtls_ecp_gen_privkey(&group, &readerPrivateKey, &mbedtls_entropy_func,
+                              &entropyCtx));
   ASSERT_CODE_PRINT_RETURN_OPT(
-      "Failed to load group",
-      mbedtls_mpi_read_string(&keypair.private_d, 16, priv_hex));
-
-  // TOOD: Try using mbedtls_ecp_set_public_key
-  // 5. Load the public key
-  // ASSERT_CODE_PRINT_RETURN_OPT(
-  //     "Failed to create public key",
-  //     mbedtls_ecp_point_read_string(
-  //         &keypair.private_Q, 16,
-  //         "65b896331da50332029c967c5802943d2068d5f9dc0886953f9c22f756f7cc59",
-  //         "0ca8e45d3b2812cd1b9d1047598f5e0b29464c270d0bf7302292010c6782a0f6"));
+      "Failed to read devicePublicKey",
+      mbedtls_ecp_point_read_binary(&group, &devicePublicKey, deviceXY.data(),
+                                    deviceXY.size()));
   ASSERT_CODE_PRINT_RETURN_OPT(
-      "Failed to create public key",
-      mbedtls_ecp_point_read_binary(&keypair.private_grp, &keypair.private_Q,
-                                    deviceXY.data(), deviceXY.size()));
-
-  // 6. Validate the keys (Optional but good practice)
-  ASSERT_CODE_PRINT_RETURN_OPT(
-      "Invalid private key",
-      mbedtls_ecp_check_privkey(&keypair.private_grp, &keypair.private_d));
-
+      "Invalid devicePublicKey",
+      mbedtls_ecp_check_pubkey(&group, &devicePublicKey));
   ASSERT_CODE_PRINT_RETURN_OPT(
       "Failed to computed shared secret",
-      mbedtls_ecdh_compute_shared(&keypair.private_grp, &sharedSecret,
-                                  &keypair.private_Q, &keypair.private_d,
-                                  &mbedtls_entropy_func, &entropyCtx));
+      mbedtls_ecdh_compute_shared(&group, &sharedSecret, &devicePublicKey,
+                                  &readerPrivateKey, &mbedtls_entropy_func,
+                                  &entropyCtx));
 
   static uint8_t sharedSecretBuf[32];
   ASSERT_CODE_PRINT_RETURN_OPT(
