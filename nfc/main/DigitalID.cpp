@@ -39,18 +39,17 @@ class IdentCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 } identCharacteristicCallbacks;
 
 class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
-  std::span<const uint8_t> request;
-  NimBLECharacteristic *serverToClientCharacteristic;
-
 public:
-  StateCharacteristicCallbacks(
-      std::span<const uint8_t> request,
+  void setServerToClientCharacteristic(
       NimBLECharacteristic *serverToClientCharacteristic) {
-    this->request = request;
     this->serverToClientCharacteristic = serverToClientCharacteristic;
   }
+  void setRequest(std::span<const uint8_t> request) { this->request = request; }
 
 private:
+  std::span<const uint8_t> request;
+  NimBLECharacteristic *serverToClientCharacteristic = nullptr;
+
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
     Serial.println("Subscribed!");
@@ -74,7 +73,7 @@ private:
 
     NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
-};
+} stateCharacteristicCallbacks;
 
 class ServerToClientCharacteristicCallbacks
     : public NimBLECharacteristicCallbacks {
@@ -627,9 +626,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   fullRequestBuf[0] = 0x00;
   printHex("Full Request: ", requestSpan);
 
-  // TODO: this leaks memory, right?
-  stateCharacteristic->setCallbacks(new StateCharacteristicCallbacks(
-      requestSpan, serverToClientCharacteristic));
+  stateCharacteristicCallbacks.setRequest(requestSpan);
 
   // TODO: also need to return full handover response to be used by the
   // caller for encryption stuff
@@ -648,17 +645,24 @@ void setupBLEServer() {
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(&serverCallbacks);
   pService = pServer->createService("82186040-093c-4ff9-a90b-6994d231b2a4");
+
   stateCharacteristic = pService->createCharacteristic(
       "00000005-A123-48CE-896B-4C76973373E6",
       NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
+  stateCharacteristic->setCallbacks(&stateCharacteristicCallbacks);
+
   clientToServerCharacteristic = pService->createCharacteristic(
       "00000006-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::WRITE_NR);
   clientToServerCharacteristic->setCallbacks(
       &clientToServerCharacteristicCallbacks);
+
   serverToClientCharacteristic = pService->createCharacteristic(
       "00000007-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::NOTIFY);
   serverToClientCharacteristic->setCallbacks(
       &serverToClientCharacteristicCallbacks);
+  stateCharacteristicCallbacks.setServerToClientCharacteristic(
+      serverToClientCharacteristic);
+
   identCharacteristic = pService->createCharacteristic(
       "00000008-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::READ);
   identCharacteristic->setCallbacks(&identCharacteristicCallbacks);
