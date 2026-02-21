@@ -126,19 +126,18 @@ generateEncryptedRequest(std::span<const uint8_t> deviceXY,
   return encryptedRequest;
 }
 
-bool setIdent(NimBLECharacteristic *identCharacteristic,
-              std::span<const uint8_t> encodedDevicePublicKey) {
+std::optional<std::span<const uint8_t, 16>>
+getIdent(std::span<const uint8_t> encodedDevicePublicKey) {
   static uint8_t hkdfOutput[16];
   static const uint8_t info[] = "BLEIdent";
   const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  CHECK_CRYPTO_RETURN_BOOL("Failed to HKDF",
-                           mbedtls_hkdf(md, nullptr, 0,
-                                        encodedDevicePublicKey.data(),
-                                        encodedDevicePublicKey.size(), info, 8,
-                                        hkdfOutput, sizeof(hkdfOutput)));
-  printHex("Ident: ", {hkdfOutput, sizeof(hkdfOutput)});
-  identCharacteristic->setValue(hkdfOutput, sizeof(hkdfOutput));
-
-  return true;
+  CHECK_CRYPTO_RETURN_OPT("Failed to HKDF",
+                          mbedtls_hkdf(md, nullptr, 0,
+                                       encodedDevicePublicKey.data(),
+                                       encodedDevicePublicKey.size(), info, 8,
+                                       hkdfOutput, sizeof(hkdfOutput)));
+  std::span<uint8_t, sizeof(hkdfOutput)> ident{hkdfOutput};
+  printHex("Ident: ", ident);
+  return ident;
 }
 } // namespace Crypto

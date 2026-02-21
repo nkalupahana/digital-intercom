@@ -1,6 +1,5 @@
 #pragma once
 
-#include "NimBLECharacteristic.h"
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -45,8 +44,8 @@ std::optional<
     std::pair<std::span<const uint8_t, 32>, std::span<const uint8_t, 32>>>
 copyReaderPublicKeyPoints();
 
-bool setIdent(NimBLECharacteristic *identCharacteristic,
-              std::span<const uint8_t> encodedDevicePublicKey);
+std::optional<std::span<const uint8_t, 16>>
+getIdent(std::span<const uint8_t> encodedDevicePublicKey);
 
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,

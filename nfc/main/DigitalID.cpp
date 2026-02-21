@@ -476,7 +476,10 @@ std::optional<std::span<const uint8_t>> performHandoff() {
       cbor_encoder_get_buffer_size(&encoder, encodedDevicePublicKeyBuf));
   printHex("Encoded device public key: ", encodedDevicePublicKeySpan);
 
-  Crypto::setIdent(identCharacteristic, encodedDevicePublicKeySpan);
+  auto identOpt = Crypto::getIdent(encodedDevicePublicKeySpan);
+  CHECK_PRINT_RETURN_OPT("Failed to construct ident", identOpt);
+  const auto &ident = *identOpt;
+  identCharacteristic->setValue(ident.data(), ident.size());
 
   // Extract x and y from the device public key
   CborParser keyParser;
