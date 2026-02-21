@@ -486,10 +486,10 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   CborValue keyValue;
   std::optional<std::span<const uint8_t>> xSpanOpt = std::nullopt;
   std::optional<std::span<const uint8_t>> ySpanOpt = std::nullopt;
-  CHECK_PRINT_RETURN_OPT("CBOR parser failed to initialize",
-                         cbor_parser_init(devicePublicKeySpan.data(),
-                                          devicePublicKeySpan.size(), 0,
-                                          &keyParser, &keyValue));
+  CHECK_CBOR_RETURN_OPT("CBOR parser failed to initialize",
+                        cbor_parser_init(devicePublicKeySpan.data(),
+                                         devicePublicKeySpan.size(), 0,
+                                         &keyParser, &keyValue));
   CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&keyValue));
   CHECK_CBOR_RETURN_OPT("Failed to enter map",
                         cbor_value_enter_container(&keyValue, &keyValue));
