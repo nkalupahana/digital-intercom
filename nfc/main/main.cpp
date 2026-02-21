@@ -8,6 +8,7 @@
 
 #include "../../../constants.h"
 #include "Card.h"
+#include "Crypto.h"
 #include "DigitalID.h"
 #include "NFC.h"
 #include "utils.h"
@@ -55,6 +56,7 @@ void setup() {
     errorHang();
   }
 
+  Crypto::setup();
   DigitalID::setupBLEServer();
 
   ESP_LOGI(TAG, "Ready!");

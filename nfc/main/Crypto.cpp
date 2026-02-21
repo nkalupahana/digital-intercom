@@ -1,7 +1,7 @@
 #include "Crypto.h"
-#include "NimBLECharacteristic.h"
 #include "errors.h"
 #include "utils.h"
+#include <NimBLECharacteristic.h>
 #include <cstdint>
 #include <mbedtls/bignum.h>
 #include <mbedtls/ecdh.h>
@@ -12,17 +12,19 @@
 #include <optional>
 #include <psa/crypto.h>
 
-int errorCode;
-
 namespace Crypto {
 uint8_t encryptedRequestBuf[REQUEST_SIZE];
+
+void setup() {
+  if (psa_crypto_init() != PSA_SUCCESS) {
+    ESP_LOGE(TAG, "Unable to init crypto");
+    errorHang();
+  }
+}
 
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                          std::span<const uint8_t> transcript) {
-  CHECK_PRINT_RETURN_OPT("Unable to init crypto",
-                         psa_crypto_init() == PSA_SUCCESS);
-
   // 1. Context definitions
   mbedtls_ecp_keypair keypair;
 

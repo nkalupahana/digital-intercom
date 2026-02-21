@@ -38,6 +38,8 @@ constexpr uint8_t unencryptedRequest[] = {
 constexpr size_t TAG_SIZE = 16;
 constexpr size_t REQUEST_SIZE = sizeof(unencryptedRequest) + TAG_SIZE;
 
+void setup();
+
 bool setIdent(NimBLECharacteristic *identCharacteristic,
               std::span<const uint8_t> encodedDevicePublicKey);
 
