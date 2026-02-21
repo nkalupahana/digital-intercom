@@ -22,4 +22,4 @@ idf_component_register(
     INCLUDE_DIRS "PN532/src" "NDEF"
     REQUIRES arduino-esp32
 )
-target_compile_definitions(${COMPONENT_LIB} PUBLIC NFC_INTERFACE_SPI) 
+target_compile_definitions(${COMPONENT_LIB} PUBLIC NFC_INTERFACE_SPI)

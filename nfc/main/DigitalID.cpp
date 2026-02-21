@@ -1,16 +1,16 @@
 #include "Crypto.h"
 #include "NFC.h"
-#include "NdefMessage.h"
-#include "NimBLEAttValue.h"
-#include "NimBLECharacteristic.h"
-#include "NimBLELocalValueAttribute.h"
-#include "NimBLEServer.h"
 #include "Slice.h"
-#include "cbor.h"
 #include "errors.h"
 #include "utils.h"
+#include <NdefMessage.h>
 #include <NdefRecord.h>
+#include <NimBLEAttValue.h>
+#include <NimBLECharacteristic.h>
 #include <NimBLEDevice.h>
+#include <NimBLELocalValueAttribute.h>
+#include <NimBLEServer.h>
+#include <cbor.h>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -378,64 +378,58 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   // Get public key out of device engagement
   CborParser parser;
   CborValue value;
-  CHECK_PRINT_RETURN_OPT("CBOR parser fialed to initialize",
-                         cbor_parser_init(encodedDeviceEngagementSpan.data(),
-                                          encodedDeviceEngagementSpan.size(), 0,
-                                          &parser, &value) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("CBOR parser fialed to initialize",
+                        cbor_parser_init(encodedDeviceEngagementSpan.data(),
+                                         encodedDeviceEngagementSpan.size(), 0,
+                                         &parser, &value));
   CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&value));
-  CHECK_PRINT_RETURN_OPT("Failed to enter map",
-                         cbor_value_enter_container(&value, &value) ==
-                             CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to enter map",
+                        cbor_value_enter_container(&value, &value));
   bool keyFound = false;
   while (!cbor_value_at_end(&value)) {
     if (cbor_value_is_unsigned_integer(&value)) {
       uint64_t key;
-      CHECK_PRINT_RETURN_OPT("Failed to get key",
-                             cbor_value_get_uint64(&value, &key) ==
-                                 CborNoError);
+      CHECK_CBOR_RETURN_OPT("Failed to get key",
+                            cbor_value_get_uint64(&value, &key));
       if (key == 1) {
         keyFound = true;
         break;
       }
     }
-    CHECK_PRINT_RETURN_OPT("Failed to advance",
-                           cbor_value_advance(&value) == CborNoError);
+    CHECK_CBOR_RETURN_OPT("Failed to advance", cbor_value_advance(&value));
   }
   CHECK_PRINT_RETURN_OPT("Key 1 not found", keyFound);
-  CHECK_PRINT_RETURN_OPT("Failed to advance to data",
-                         cbor_value_advance(&value) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to advance to data",
+                        cbor_value_advance(&value));
   CHECK_PRINT_RETURN_OPT("Data is not array", cbor_value_is_array(&value));
-  CHECK_PRINT_RETURN_OPT("Failed to enter array",
-                         cbor_value_enter_container(&value, &value) ==
-                             CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to enter array",
+                        cbor_value_enter_container(&value, &value));
   CHECK_PRINT_RETURN_OPT("First value is not uint",
                          cbor_value_is_unsigned_integer(&value));
   uint64_t cipherSuiteIdentifier;
-  CHECK_PRINT_RETURN_OPT(
-      "Failed to get cipher suite identifier",
-      cbor_value_get_uint64(&value, &cipherSuiteIdentifier) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to get cipher suite identifier",
+                        cbor_value_get_uint64(&value, &cipherSuiteIdentifier));
   CHECK_PRINT_RETURN_OPT("Cipher suite identifier is not 1, which is the only "
                          "identifier we know about",
                          cipherSuiteIdentifier == 1);
-  CHECK_PRINT_RETURN_OPT("Failed to advance to tagged device public key",
-                         cbor_value_advance(&value) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to advance to tagged device public key",
+                        cbor_value_advance(&value));
   CHECK_PRINT_RETURN_OPT("Tagged device public key is not tagged",
                          cbor_value_is_tag(&value));
   CborTag devicePublicKeyTag;
-  CHECK_PRINT_RETURN_OPT("Failed to get device public key tag",
-                         cbor_value_get_tag(&value, &devicePublicKeyTag) ==
-                             CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to get device public key tag",
+                        cbor_value_get_tag(&value, &devicePublicKeyTag));
   CHECK_PRINT_RETURN_OPT("device public key tag is not 24",
                          devicePublicKeyTag == 24);
-  CHECK_PRINT_RETURN_OPT("Failed to advance to device public key",
-                         cbor_value_advance(&value) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to advance to device public key",
+                        cbor_value_advance(&value));
   CHECK_PRINT_RETURN_OPT("device public key is not byte string",
                          cbor_value_is_byte_string(&value));
   size_t devicePublicKeyLength = PN532_PACKBUFFSIZ;
-  CHECK_PRINT_RETURN_OPT("Failed to get device public key",
-                         cbor_value_copy_byte_string(&value, devicePublicKeyBuf,
-                                                     &devicePublicKeyLength,
-                                                     &value) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to get device public key",
+                        cbor_value_copy_byte_string(&value, devicePublicKeyBuf,
+                                                    &devicePublicKeyLength,
+                                                    &value));
   std::span<const uint8_t> devicePublicKeySpan(devicePublicKeyBuf,
                                                devicePublicKeyLength);
   printHex("device public key: ", devicePublicKeySpan);
@@ -444,13 +438,12 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   // This could definintely be improved.
   CborEncoder encoder;
   cbor_encoder_init(&encoder, encodedDevicePublicKeyBuf, PN532_PACKBUFFSIZ, 0);
-  CHECK_PRINT_RETURN_OPT("Failed to encode device public key",
-                         cbor_encode_tag(&encoder, devicePublicKeyTag) ==
-                             CborNoError);
-  CHECK_PRINT_RETURN_OPT(
-      "Failed to encode device public key",
-      cbor_encode_byte_string(&encoder, devicePublicKeySpan.data(),
-                              devicePublicKeySpan.size()) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to encode device public key",
+                        cbor_encode_tag(&encoder, devicePublicKeyTag));
+  CHECK_CBOR_RETURN_OPT("Failed to encode device public key",
+                        cbor_encode_byte_string(&encoder,
+                                                devicePublicKeySpan.data(),
+                                                devicePublicKeySpan.size()));
   std::span<const uint8_t> encodedDevicePublicKeySpan(
       encodedDevicePublicKeyBuf,
       cbor_encoder_get_buffer_size(&encoder, encodedDevicePublicKeyBuf));
@@ -463,54 +456,51 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   CborValue keyValue;
   std::optional<std::span<const uint8_t>> xSpanOpt = std::nullopt;
   std::optional<std::span<const uint8_t>> ySpanOpt = std::nullopt;
-  CHECK_PRINT_RETURN_OPT(
-      "CBOR parser failed to initialize",
-      cbor_parser_init(devicePublicKeySpan.data(), devicePublicKeySpan.size(),
-                       0, &keyParser, &keyValue) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("CBOR parser failed to initialize",
+                         cbor_parser_init(devicePublicKeySpan.data(),
+                                          devicePublicKeySpan.size(), 0,
+                                          &keyParser, &keyValue));
   CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&keyValue));
-  CHECK_PRINT_RETURN_OPT("Failed to enter map",
-                         cbor_value_enter_container(&keyValue, &keyValue) ==
-                             CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to enter map",
+                        cbor_value_enter_container(&keyValue, &keyValue));
   // Find -2 (x) and -3 (y)
   while (!cbor_value_at_end(&keyValue) &&
          (!xSpanOpt.has_value() || !ySpanOpt.has_value())) {
     if (cbor_value_is_negative_integer(&keyValue)) {
       int key;
-      CHECK_PRINT_RETURN_OPT("Failed to get key",
-                             cbor_value_get_int(&keyValue, &key) ==
-                                 CborNoError);
+      CHECK_CBOR_RETURN_OPT("Failed to get key",
+                            cbor_value_get_int(&keyValue, &key));
       if (key == -2) {
-        CHECK_PRINT_RETURN_OPT("Failed to advance to x",
-                               cbor_value_advance(&keyValue) == CborNoError);
+        CHECK_CBOR_RETURN_OPT("Failed to advance to x",
+                              cbor_value_advance(&keyValue));
         CHECK_PRINT_RETURN_OPT("x is not byte string",
                                cbor_value_is_byte_string(&keyValue));
         size_t xLength = devicePubKeyX.size();
-        CHECK_PRINT_RETURN_OPT(
-            "Failed to get x",
-            cbor_value_copy_byte_string(&keyValue, devicePubKeyX.data(),
-                                        &xLength, NULL) == CborNoError);
+        CHECK_CBOR_RETURN_OPT("Failed to get x",
+                              cbor_value_copy_byte_string(&keyValue,
+                                                          devicePubKeyX.data(),
+                                                          &xLength, NULL));
         CHECK_PRINT_RETURN_OPT("x length is not 32", xLength == COORD_LENGTH);
         xSpanOpt = devicePubKeyX;
       }
 
       if (key == -3) {
-        CHECK_PRINT_RETURN_OPT("Failed to advance to y",
-                               cbor_value_advance(&keyValue) == CborNoError);
+        CHECK_CBOR_RETURN_OPT("Failed to advance to y",
+                              cbor_value_advance(&keyValue));
         CHECK_PRINT_RETURN_OPT("y is not byte string",
                                cbor_value_is_byte_string(&keyValue));
         size_t yLength = devicePubKeyY.size();
 
-        CHECK_PRINT_RETURN_OPT(
-            "Failed to get y",
-            cbor_value_copy_byte_string(&keyValue, devicePubKeyY.data(),
-                                        &yLength, NULL) == CborNoError);
+        CHECK_CBOR_RETURN_OPT("Failed to get y",
+                              cbor_value_copy_byte_string(&keyValue,
+                                                          devicePubKeyY.data(),
+                                                          &yLength, NULL));
         CHECK_PRINT_RETURN_OPT("y length is not 32", yLength == COORD_LENGTH);
         ySpanOpt = devicePubKeyY;
       }
     }
 
-    CHECK_PRINT_RETURN_OPT("Failed to advance",
-                           cbor_value_advance(&keyValue) == CborNoError);
+    CHECK_CBOR_RETURN_OPT("Failed to advance", cbor_value_advance(&keyValue));
   }
   CHECK_PRINT_RETURN_OPT("Failed to get x or y",
                          xSpanOpt.has_value() && ySpanOpt.has_value());
@@ -520,55 +510,51 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                     sizeof(sessionTranscriptBuf) - 5,
                     0); // TODO: clean up offsets
   CborEncoder arrayEncoder;
-  CHECK_PRINT_RETURN_OPT("Failed to create array",
-                         cbor_encoder_create_array(&transcriptEncoder,
-                                                   &arrayEncoder,
-                                                   3) == CborNoError);
+  CHECK_CBOR_RETURN_OPT(
+      "Failed to create array",
+      cbor_encoder_create_array(&transcriptEncoder, &arrayEncoder, 3));
 
   // 1: Device engagement
-  CHECK_PRINT_RETURN_OPT("Failed to add tag",
-                         cbor_encode_tag(&arrayEncoder, 24) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to add tag",
+                        cbor_encode_tag(&arrayEncoder, 24));
   CHECK_PRINT_RETURN_OPT(
       "Failed to add device engagement",
       cbor_encode_byte_string(&arrayEncoder, encodedDeviceEngagementSpan.data(),
-                              encodedDeviceEngagementSpan.size()) ==
-          CborNoError);
+                              encodedDeviceEngagementSpan.size()));
   // 2: Reader public key
-  CHECK_PRINT_RETURN_OPT("Failed to add tag",
-                         cbor_encode_tag(&arrayEncoder, 24) == CborNoError);
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT("Failed to add tag",
+                        cbor_encode_tag(&arrayEncoder, 24));
+  CHECK_CBOR_RETURN_OPT(
       "Failed to add reader public key",
       cbor_encode_byte_string(&arrayEncoder, encodedReaderPublicKey,
-                              sizeof(encodedReaderPublicKey)) == CborNoError);
+                              sizeof(encodedReaderPublicKey)));
   // 3: Handover array
   CborEncoder handoverArrayEncoder;
-  CHECK_PRINT_RETURN_OPT("Failed to add handover array",
-                         cbor_encoder_create_array(&arrayEncoder,
-                                                   &handoverArrayEncoder,
-                                                   2) == CborNoError);
+  CHECK_CBOR_RETURN_OPT(
+      "Failed to add handover array",
+      cbor_encoder_create_array(&arrayEncoder, &handoverArrayEncoder, 2));
   // 3a: Handover select (incorrectly named handover response, TODO fix)
-  CHECK_PRINT_RETURN_OPT("Failed to add handover select",
-                         cbor_encode_byte_string(
-                             &handoverArrayEncoder, handoverResponseSpan.data(),
-                             handoverResponseSpan.size()) == CborNoError);
+  CHECK_CBOR_RETURN_OPT("Failed to add handover select",
+                        cbor_encode_byte_string(&handoverArrayEncoder,
+                                                handoverResponseSpan.data(),
+                                                handoverResponseSpan.size()));
   // 3b: Handover request
-  // CHECK_PRINT_RETURN_OPT("Failed to add handover select",
+  // CHECK_CBOR_RETURN_OPT("Failed to add handover select",
   //                        cbor_encode_byte_string(
   //                            &handoverArrayEncoder,
   //                            handoverResponseSpan.data(),
-  //                            handoverResponseSpan.size()) == CborNoError);
-  CHECK_PRINT_RETURN_OPT(
-      "Failed to add handover request",
-      cbor_encode_byte_string(&handoverArrayEncoder, handoverRequestSpan.data(),
-                              handoverRequestSpan.size()) == CborNoError);
+  //                            handoverResponseSpan.size()) );
+  CHECK_CBOR_RETURN_OPT("Failed to add handover request",
+                        cbor_encode_byte_string(&handoverArrayEncoder,
+                                                handoverRequestSpan.data(),
+                                                handoverRequestSpan.size()));
   // Close containers
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT(
       "Failed to close handover array",
-      cbor_encoder_close_container(&arrayEncoder, &handoverArrayEncoder) ==
-          CborNoError);
-  CHECK_PRINT_RETURN_OPT("Failed to close array",
-                         cbor_encoder_close_container(
-                             &transcriptEncoder, &arrayEncoder) == CborNoError);
+      cbor_encoder_close_container(&arrayEncoder, &handoverArrayEncoder));
+  CHECK_CBOR_RETURN_OPT(
+      "Failed to close array",
+      cbor_encoder_close_container(&transcriptEncoder, &arrayEncoder));
   // Add tag
   sessionTranscriptBuf[0] = 0xD8;
   sessionTranscriptBuf[1] = 0x18;
@@ -594,32 +580,30 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   cbor_encoder_init(&requestEncoder, fullRequestBuf + 1,
                     sizeof(fullRequestBuf) - 1, 0);
   CborEncoder mapEncoder;
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT(
       "Failed to create map",
-      cbor_encoder_create_map(&requestEncoder, &mapEncoder, 2) == CborNoError);
+      cbor_encoder_create_map(&requestEncoder, &mapEncoder, 2));
   auto readerKey = "eReaderKey";
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT(
       "Failed to reader key",
-      cbor_encode_text_string(&mapEncoder, readerKey, strlen(readerKey)) ==
-          CborNoError);
-  CHECK_PRINT_RETURN_OPT("Failed to add tag for reader public key",
-                         cbor_encode_tag(&mapEncoder, 24) == CborNoError);
-  CHECK_PRINT_RETURN_OPT(
+      cbor_encode_text_string(&mapEncoder, readerKey, strlen(readerKey)));
+  CHECK_CBOR_RETURN_OPT("Failed to add tag for reader public key",
+                        cbor_encode_tag(&mapEncoder, 24));
+  CHECK_CBOR_RETURN_OPT(
       "Failed to add reader public key",
       cbor_encode_byte_string(&mapEncoder, encodedReaderPublicKey,
-                              sizeof(encodedReaderPublicKey)) == CborNoError);
+                              sizeof(encodedReaderPublicKey)));
   auto dataKey = "data";
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_CBOR_RETURN_OPT(
       "Failed to add data key",
-      cbor_encode_text_string(&mapEncoder, dataKey, strlen(dataKey)) ==
-          CborNoError);
-  CHECK_PRINT_RETURN_OPT(
-      "Failed to add data",
-      cbor_encode_byte_string(&mapEncoder, encryptedRequestSpan.data(),
-                              encryptedRequestSpan.size()) == CborNoError);
-  CHECK_PRINT_RETURN_OPT("Failed to close map",
-                         cbor_encoder_close_container(
-                             &requestEncoder, &mapEncoder) == CborNoError);
+      cbor_encode_text_string(&mapEncoder, dataKey, strlen(dataKey)));
+  CHECK_CBOR_RETURN_OPT("Failed to add data",
+                        cbor_encode_byte_string(&mapEncoder,
+                                                encryptedRequestSpan.data(),
+                                                encryptedRequestSpan.size()));
+  CHECK_CBOR_RETURN_OPT(
+      "Failed to close map",
+      cbor_encoder_close_container(&requestEncoder, &mapEncoder));
   std::span<const uint8_t> requestSpan(
       fullRequestBuf,
       cbor_encoder_get_buffer_size(&requestEncoder, fullRequestBuf + 1) + 1);

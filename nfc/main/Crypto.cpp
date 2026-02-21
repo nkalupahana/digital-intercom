@@ -43,52 +43,51 @@ void setup() {
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                          std::span<const uint8_t> transcript) {
-  ASSERT_CODE_PRINT_RETURN_OPT(
-      "Failed to generate readerPrivateKey",
-      mbedtls_ecp_gen_privkey(&group, &readerPrivateKey, &mbedtls_entropy_func,
-                              &entropyCtx));
-  ASSERT_CODE_PRINT_RETURN_OPT(
+  CHECK_CRYPTO_RETURN_OPT("Failed to generate readerPrivateKey",
+                          mbedtls_ecp_gen_privkey(&group, &readerPrivateKey,
+                                                  &mbedtls_entropy_func,
+                                                  &entropyCtx));
+  CHECK_CRYPTO_RETURN_OPT(
       "Failed to read devicePublicKey",
       mbedtls_ecp_point_read_binary(&group, &devicePublicKey, deviceXY.data(),
                                     deviceXY.size()));
-  ASSERT_CODE_PRINT_RETURN_OPT(
-      "Invalid devicePublicKey",
-      mbedtls_ecp_check_pubkey(&group, &devicePublicKey));
-  ASSERT_CODE_PRINT_RETURN_OPT(
+  CHECK_CRYPTO_RETURN_OPT("Invalid devicePublicKey",
+                          mbedtls_ecp_check_pubkey(&group, &devicePublicKey));
+  CHECK_CRYPTO_RETURN_OPT(
       "Failed to computed shared secret",
       mbedtls_ecdh_compute_shared(&group, &sharedSecret, &devicePublicKey,
                                   &readerPrivateKey, &mbedtls_entropy_func,
                                   &entropyCtx));
 
   static uint8_t sharedSecretBuf[32];
-  ASSERT_CODE_PRINT_RETURN_OPT(
-      "Failed to write shared secret to buffer",
-      mbedtls_mpi_write_binary(&sharedSecret, sharedSecretBuf,
-                               sizeof(sharedSecretBuf)));
+  CHECK_CRYPTO_RETURN_OPT("Failed to write shared secret to buffer",
+                          mbedtls_mpi_write_binary(&sharedSecret,
+                                                   sharedSecretBuf,
+                                                   sizeof(sharedSecretBuf)));
   static uint8_t readerKey[32];
   static const uint8_t readerInfo[] = "SKReader";
   const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  ASSERT_CODE_PRINT_RETURN_OPT("Failed to HKDF reader key",
-                               mbedtls_hkdf(md, transcript.data(),
-                                            transcript.size(), sharedSecretBuf,
-                                            sizeof(sharedSecretBuf), readerInfo,
-                                            8, readerKey, sizeof(readerKey)));
+  CHECK_CRYPTO_RETURN_OPT("Failed to HKDF reader key",
+                          mbedtls_hkdf(md, transcript.data(), transcript.size(),
+                                       sharedSecretBuf, sizeof(sharedSecretBuf),
+                                       readerInfo, 8, readerKey,
+                                       sizeof(readerKey)));
   printHex("Reader Key: ", {readerKey, sizeof(readerKey)});
   static uint8_t deviceKey[32];
   static const uint8_t deviceInfo[] = "SKDevice";
-  ASSERT_CODE_PRINT_RETURN_OPT("Failed to HKDF device key",
-                               mbedtls_hkdf(md, transcript.data(),
-                                            transcript.size(), sharedSecretBuf,
-                                            sizeof(sharedSecretBuf), deviceInfo,
-                                            8, deviceKey, sizeof(deviceKey)));
+  CHECK_CRYPTO_RETURN_OPT("Failed to HKDF device key",
+                          mbedtls_hkdf(md, transcript.data(), transcript.size(),
+                                       sharedSecretBuf, sizeof(sharedSecretBuf),
+                                       deviceInfo, 8, deviceKey,
+                                       sizeof(deviceKey)));
   printHex("Device Key: ", {deviceKey, sizeof(deviceKey)});
 
   static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-  ASSERT_CODE_PRINT_RETURN_OPT(
+  CHECK_CRYPTO_RETURN_OPT(
       "Failed to set key",
       mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, readerKey, 256));
   uint8_t *tag = encryptedRequestBuf + sizeof(unencryptedRequest);
-  ASSERT_CODE_PRINT_RETURN_OPT(
+  CHECK_CRYPTO_RETURN_OPT(
       "Failed to encrypt",
       mbedtls_gcm_crypt_and_tag(&gcmCtx, MBEDTLS_GCM_ENCRYPT,
                                 sizeof(unencryptedRequest), iv, sizeof(iv),
@@ -107,11 +106,11 @@ bool setIdent(NimBLECharacteristic *identCharacteristic,
   static uint8_t hkdfOutput[16];
   static const uint8_t info[] = "BLEIdent";
   const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  ASSERT_CODE_PRINT_RETURN_BOOL(
-      "Failed to HKDF",
-      mbedtls_hkdf(md, nullptr, 0, encodedDevicePublicKey.data(),
-                   encodedDevicePublicKey.size(), info, 8, hkdfOutput,
-                   sizeof(hkdfOutput)));
+  CHECK_CRYPTO_RETURN_BOOL("Failed to HKDF",
+                           mbedtls_hkdf(md, nullptr, 0,
+                                        encodedDevicePublicKey.data(),
+                                        encodedDevicePublicKey.size(), info, 8,
+                                        hkdfOutput, sizeof(hkdfOutput)));
   printHex("Ident: ", {hkdfOutput, sizeof(hkdfOutput)});
   identCharacteristic->setValue(hkdfOutput, sizeof(hkdfOutput));
 
