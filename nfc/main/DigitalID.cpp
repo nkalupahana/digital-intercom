@@ -39,6 +39,18 @@ class IdentCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
 } identCharacteristicCallbacks;
 
 class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
+  std::span<const uint8_t> request;
+  NimBLECharacteristic *serverToClientCharacteristic;
+
+public:
+  StateCharacteristicCallbacks(
+      std::span<const uint8_t> request,
+      NimBLECharacteristic *serverToClientCharacteristic) {
+    this->request = request;
+    this->serverToClientCharacteristic = serverToClientCharacteristic;
+  }
+
+private:
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
     Serial.println("Subscribed!");
@@ -50,9 +62,42 @@ class StateCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
     NimBLEAttValue value = pCharacteristic->getValue();
     printHex("Received value to state characteristic: ",
              {value.data(), value.length()});
+
+    if (value.length() == 1 && value.data()[0] == 0x01) {
+      printHex("Sending request to client: ", request);
+      bool success =
+          serverToClientCharacteristic->notify(request.data(), request.size());
+      if (!success) {
+        ESP_LOGE(TAG, "Failed to send request to client");
+      }
+    }
+
     NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
-} stateCharacteristicCallbacks;
+};
+
+class ServerToClientCharacteristicCallbacks
+    : public NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic *pCharacteristic,
+                   NimBLEConnInfo &connInfo, uint16_t subValue) override {
+    Serial.println("Subscribed to server to client characteristic!");
+    Serial.printf("Subvalue: %d\n", subValue);
+    NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
+                                               subValue);
+  };
+} serverToClientCharacteristicCallbacks;
+
+class ClientToServerCharacteristicCallbacks
+    : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *pCharacteristic,
+               NimBLEConnInfo &connInfo) override {
+    Serial.println("Write to client to server characteristic!");
+    printHex("Received value to client to server characteristic: ",
+             {pCharacteristic->getValue().data(),
+              pCharacteristic->getValue().length()});
+    NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
+  };
+} clientToServerCharacteristicCallbacks;
 
 uint8_t rbuf[PN532_PACKBUFFSIZ];
 // TODO: really, only one buffer is needed, with two spans.
@@ -81,6 +126,8 @@ uint8_t handoverRequestBuf[] = {
     0x65, 0x2E, 0x6F, 0x6F, 0x62, 0x30, 0x02, 0x1C, 0x00, 0x11, 0x07, 0xA4,
     0xB2, 0x31, 0xD2, 0x94, 0x69, 0x0B, 0xA9, 0xF9, 0x4F, 0x3C, 0x09, 0x40,
     0x60, 0x18, 0x82};
+uint8_t
+    fullRequestBuf[Crypto::REQUEST_SIZE + sizeof(encodedReaderPublicKey) + 32];
 auto handoverRequestSpan =
     std::span<const uint8_t>(handoverRequestBuf, sizeof(handoverRequestBuf));
 uint8_t sessionTranscriptBuf[PN532_PACKBUFFSIZ * 3];
@@ -537,6 +584,53 @@ std::optional<std::span<const uint8_t>> performHandoff() {
                                           binaryLength + 5);
   printHex("Transcript: ", transcriptSpan);
 
+  printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
+  auto encryptedRequestOpt = Crypto::generateEncryptedRequest(
+      {deviceXYPubKeyEncodedBuf}, transcriptSpan);
+  CHECK_RETURN_OPT(encryptedRequestOpt);
+  auto encryptedRequestSpan = *encryptedRequestOpt;
+
+  // Build full request
+  CborEncoder requestEncoder;
+  cbor_encoder_init(&requestEncoder, fullRequestBuf + 1,
+                    sizeof(fullRequestBuf) - 1, 0);
+  CborEncoder mapEncoder;
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to create map",
+      cbor_encoder_create_map(&requestEncoder, &mapEncoder, 2) == CborNoError);
+  auto readerKey = "eReaderKey";
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to reader key",
+      cbor_encode_text_string(&mapEncoder, readerKey, strlen(readerKey)) ==
+          CborNoError);
+  CHECK_PRINT_RETURN_OPT("Failed to add tag for reader public key",
+                         cbor_encode_tag(&mapEncoder, 24) == CborNoError);
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add reader public key",
+      cbor_encode_byte_string(&mapEncoder, encodedReaderPublicKey,
+                              sizeof(encodedReaderPublicKey)) == CborNoError);
+  auto dataKey = "data";
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add data key",
+      cbor_encode_text_string(&mapEncoder, dataKey, strlen(dataKey)) ==
+          CborNoError);
+  CHECK_PRINT_RETURN_OPT(
+      "Failed to add data",
+      cbor_encode_byte_string(&mapEncoder, encryptedRequestSpan.data(),
+                              encryptedRequestSpan.size()) == CborNoError);
+  CHECK_PRINT_RETURN_OPT("Failed to close map",
+                         cbor_encoder_close_container(
+                             &requestEncoder, &mapEncoder) == CborNoError);
+  std::span<const uint8_t> requestSpan(
+      fullRequestBuf,
+      cbor_encoder_get_buffer_size(&requestEncoder, fullRequestBuf + 1) + 1);
+  fullRequestBuf[0] = 0x00;
+  printHex("Full Request: ", requestSpan);
+
+  // TODO: this leaks memory, right?
+  stateCharacteristic->setCallbacks(new StateCharacteristicCallbacks(
+      requestSpan, serverToClientCharacteristic));
+
   // TODO: also need to return full handover response to be used by the
   // caller for encryption stuff
   if (pAdvertising) {
@@ -545,9 +639,6 @@ std::optional<std::span<const uint8_t>> performHandoff() {
     ESP_LOGE(TAG, "Tried to start advertising, but advertising is not "
                   "initialized");
   }
-
-  printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
-  Crypto::test({deviceXYPubKeyEncodedBuf}, transcriptSpan);
 
   return std::nullopt;
 }
@@ -560,11 +651,14 @@ void setupBLEServer() {
   stateCharacteristic = pService->createCharacteristic(
       "00000005-A123-48CE-896B-4C76973373E6",
       NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
-  stateCharacteristic->setCallbacks(&stateCharacteristicCallbacks);
   clientToServerCharacteristic = pService->createCharacteristic(
       "00000006-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::WRITE_NR);
+  clientToServerCharacteristic->setCallbacks(
+      &clientToServerCharacteristicCallbacks);
   serverToClientCharacteristic = pService->createCharacteristic(
       "00000007-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::NOTIFY);
+  serverToClientCharacteristic->setCallbacks(
+      &serverToClientCharacteristicCallbacks);
   identCharacteristic = pService->createCharacteristic(
       "00000008-A123-48CE-896B-4C76973373E6", NIMBLE_PROPERTY::READ);
   identCharacteristic->setCallbacks(&identCharacteristicCallbacks);
