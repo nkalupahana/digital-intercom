@@ -1,4 +1,5 @@
 #include "Crypto.h"
+#include "Slice.h"
 #include "errors.h"
 #include "utils.h"
 #include <NimBLECharacteristic.h>
@@ -21,6 +22,8 @@ mbedtls_mpi sharedSecret;
 esp_gcm_context gcmCtx;
 
 mbedtls_ecp_group *group = &readerKeypair.MBEDTLS_PRIVATE(grp);
+
+uint8_t deviceKey[32];
 
 void setup() {
   // TODO: Check if we need this
@@ -68,9 +71,24 @@ copyReaderPublicKeyPoints() {
   return std::nullopt;
 }
 
+std::optional<std::span<const uint8_t, 16>>
+getIdent(std::span<const uint8_t> encodedDevicePublicKey) {
+  static uint8_t hkdfOutput[16];
+  static const uint8_t info[] = "BLEIdent";
+  const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  CHECK_CRYPTO_RETURN_OPT("Failed to HKDF",
+                          mbedtls_hkdf(md, nullptr, 0,
+                                       encodedDevicePublicKey.data(),
+                                       encodedDevicePublicKey.size(), info, 8,
+                                       hkdfOutput, sizeof(hkdfOutput)));
+  std::span<uint8_t, sizeof(hkdfOutput)> ident{hkdfOutput};
+  printHex("Ident: ", ident);
+  return ident;
+}
+
 std::optional<std::span<const uint8_t>>
-generateEncryptedRequest(std::span<const uint8_t> deviceXY,
-                         std::span<const uint8_t> transcript) {
+encryptRequest(std::span<const uint8_t> deviceXY,
+               std::span<const uint8_t> transcript) {
   CHECK_CRYPTO_RETURN_OPT("Failed to read devicePublicKey",
                           mbedtls_ecp_point_read_binary(group, &devicePublicKey,
                                                         deviceXY.data(),
@@ -97,7 +115,6 @@ generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                                        readerInfo, 8, readerKey,
                                        sizeof(readerKey)));
   printHex("Reader Key: ", {readerKey, sizeof(readerKey)});
-  static uint8_t deviceKey[32];
   static const uint8_t deviceInfo[] = "SKDevice";
   CHECK_CRYPTO_RETURN_OPT("Failed to HKDF device key",
                           mbedtls_hkdf(md, transcript.data(), transcript.size(),
@@ -125,18 +142,52 @@ generateEncryptedRequest(std::span<const uint8_t> deviceXY,
   return encryptedRequest;
 }
 
-std::optional<std::span<const uint8_t, 16>>
-getIdent(std::span<const uint8_t> encodedDevicePublicKey) {
-  static uint8_t hkdfOutput[16];
-  static const uint8_t info[] = "BLEIdent";
-  const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  CHECK_CRYPTO_RETURN_OPT("Failed to HKDF",
-                          mbedtls_hkdf(md, nullptr, 0,
-                                       encodedDevicePublicKey.data(),
-                                       encodedDevicePublicKey.size(), info, 8,
-                                       hkdfOutput, sizeof(hkdfOutput)));
-  std::span<uint8_t, sizeof(hkdfOutput)> ident{hkdfOutput};
-  printHex("Ident: ", ident);
-  return ident;
+std::optional<std::span<const uint8_t>>
+decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice) {
+  size_t dataLen = encrypted.size();
+  // mbedtls requires a 16 byte aligned buffer
+  if (dataLen == 0 || dataLen % 16 != 0) {
+    ESP_LOGE(TAG, "Invalid encrypted response size: %d", dataLen);
+    return std::nullopt;
+  }
+
+  static bool isStreamEncrypting = false;
+  // First 8 bytes is identifier and last 4 bytes is the sequence number
+  static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1};
+
+  bool isDone;
+  switch (encrypted[0]) {
+  case 0:
+    isDone = true;
+    break;
+  case 1:
+    isDone = false;
+    break;
+  default:
+    ESP_LOGE(TAG, "Unexpected encrypted response type: %02x", encrypted[0]);
+    return std::nullopt;
+  }
+
+  if (!isStreamEncrypting && isDone) {
+    // The entire payload was sent in a single MTU
+    outputSlice.reset();
+    iv[sizeof(iv) - 1] = 1;
+    std::span<const uint8_t, TAG_SIZE> tag = encrypted.last<16>();
+    size_t encryptedLen = dataLen - TAG_SIZE;
+    mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256);
+    uint8_t *outputPtr = outputSlice.deferAppend(encryptedLen);
+    CHECK_CRYPTO_RETURN_OPT(
+        "Failed to decrypt",
+        mbedtls_gcm_auth_decrypt(&gcmCtx, encryptedLen, iv, sizeof(iv), nullptr,
+                                 0, tag.data(), tag.size(), encrypted.data(),
+                                 outputPtr));
+
+    return outputSlice.spanAndReset();
+  }
+
+  ESP_LOGE(TAG, "Unsupported decryption - isStreamEncryping: %d isDone: %d",
+           isStreamEncrypting, isDone);
+  return std::nullopt;
 }
+
 } // namespace Crypto
