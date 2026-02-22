@@ -94,20 +94,23 @@ class ClientToServerCharacteristicCallbacks
   void onWrite(NimBLECharacteristic *pCharacteristic,
                NimBLEConnInfo &connInfo) override {
     ESP_LOGI(TAG, "Write to client to server characteristic!");
+    printHex("ORIGINAL: Received value to client to server characteristic: ",
+             {pCharacteristic->getValue().data(),
+              pCharacteristic->getValue().length()});
     std::span<const uint8_t> encrypted{pCharacteristic->getValue().data(),
                                        pCharacteristic->getValue().length()};
     printHex("Received encrypted client to server characteristic: ", encrypted);
 
-    static uint8_t *unencrypted = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
-    static WriteSlice writeSlice(unencrypted, UNENCRYPTED_BUFFER_SIZE);
-    std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
-        Crypto::decryptResponse(encrypted, writeSlice);
-    if (!unencryptedSpanOpt) {
-      ESP_LOGI(TAG, "Didn't decrypt entire response");
-    } else {
-      printHex("Unencrypted client to server characteristic: ",
-               *unencryptedSpanOpt);
-    }
+    // static uint8_t *unencrypted = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
+    // static WriteSlice writeSlice(unencrypted, UNENCRYPTED_BUFFER_SIZE);
+    // std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
+    //     Crypto::decryptResponse(encrypted, writeSlice);
+    // if (!unencryptedSpanOpt) {
+    //   ESP_LOGI(TAG, "Didn't decrypt entire response");
+    // } else {
+    //   printHex("Unencrypted client to server characteristic: ",
+    //            *unencryptedSpanOpt);
+    // }
 
     NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
