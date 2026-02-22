@@ -97,8 +97,8 @@ class ClientToServerCharacteristicCallbacks
     printHex("ORIGINAL: Received value to client to server characteristic: ",
              {pCharacteristic->getValue().data(),
               pCharacteristic->getValue().length()});
-    std::span<const uint8_t> encrypted{pCharacteristic->getValue().data(),
-                                       pCharacteristic->getValue().length()};
+    const auto &attValue = pCharacteristic->getValue();
+    std::span<const uint8_t> encrypted{attValue.data(), attValue.size()};
     printHex("Received encrypted client to server characteristic: ", encrypted);
 
     // static uint8_t *unencrypted = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
