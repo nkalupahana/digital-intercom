@@ -56,13 +56,19 @@ export class DigitalIntercomPlatformAccessory {
       console.log("Got credit card event", data);
       const messageLength = CREDIT_CARD_DATA_LEN + 1;
       if (data.length !== messageLength) {
-        console.log("Invalid credit card data length", data.length, messageLength);
+        console.log(
+          "Invalid credit card data length",
+          data.length,
+          messageLength,
+        );
         return;
       }
       const creditCardData = data.subarray(1, messageLength);
       const hash = creditCardData.toString("hex");
       console.log("Got credit card data", hash);
-      const allowedCard = this.platform.config.allowedCards.find((card) => card.hash === hash);
+      const allowedCard = this.platform.config.allowedCards.find(
+        (card) => card.hash === hash,
+      );
       if (!allowedCard) {
         console.log("Card not allowed", hash);
         return;

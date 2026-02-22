@@ -388,22 +388,22 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "c=IN " + sdpIpVersion + " " + sessionInfo.address,
       "t=0 0",
       "m=audio " +
-      sessionInfo.audioIncomingRtpPort.toString() +
-      " RTP/AVP " +
-      request.audio.pt.toString(),
+        sessionInfo.audioIncomingRtpPort.toString() +
+        " RTP/AVP " +
+        request.audio.pt.toString(),
       "b=AS:24",
       "a=rtpmap:110 MPEG4-GENERIC/" +
-      (request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16
-        ? "16000"
-        : "24000") +
-      "/" +
-      request.audio.channel.toString(),
+        (request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16
+          ? "16000"
+          : "24000") +
+        "/" +
+        request.audio.channel.toString(),
       "a=fmtp:110 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=" +
-      (request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16
-        ? "F8F0212C00BC00"
-        : "F8EC212C00BC00"),
+        (request.audio.sample_rate === AudioStreamingSamplerate.KHZ_16
+          ? "F8F0212C00BC00"
+          : "F8EC212C00BC00"),
       "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:" +
-      sessionInfo.audioSRTP.toString("base64"),
+        sessionInfo.audioSRTP.toString("base64"),
     ].join("\n");
 
     const ffmpegReturnAudioCmd = [
@@ -479,8 +479,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       );
     }
 
-    this.activeSession.ffmpegProcess.kill('SIGKILL');
-    this.activeSession.returnFfmpegProcess.kill('SIGKILL');
+    this.activeSession.ffmpegProcess.kill("SIGKILL");
+    this.activeSession.returnFfmpegProcess.kill("SIGKILL");
     this.activeSession.rtpDemuxer.close();
     this.activeSession = null;
 

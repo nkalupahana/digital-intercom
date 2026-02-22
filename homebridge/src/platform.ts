@@ -1,7 +1,15 @@
-import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
+import type {
+  API,
+  Characteristic,
+  DynamicPlatformPlugin,
+  Logging,
+  PlatformAccessory,
+  PlatformConfig,
+  Service,
+} from "homebridge";
 
-import { DigitalIntercomPlatformAccessory } from './platformAccessory.js';
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { DigitalIntercomPlatformAccessory } from "./platformAccessory.js";
+import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
 
 interface DigitalIntercomPlatformConfig extends PlatformConfig {
   allowedCards: {
@@ -38,8 +46,8 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
-      log.debug('Executed didFinishLaunching callback');
+    this.api.on("didFinishLaunching", () => {
+      log.debug("Executed didFinishLaunching callback");
       // run the method to discover / register your devices as accessories
       this.discoverDevices();
     });
@@ -50,7 +58,7 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
    * It should be used to set up event handlers for characteristics and update respective values.
    */
   configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.log.info("Loading accessory from cache:", accessory.displayName);
 
     // add the restored accessory to the accessories cache, so we can track if it has already been registered
     this.accessories.set(accessory.UUID, accessory);
@@ -66,16 +74,21 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
     const uuid = this.api.hap.uuid.generate(accessoryName);
     const existingAccessory = this.accessories.get(uuid);
     if (existingAccessory) {
-      this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+      this.log.info(
+        "Restoring existing accessory from cache:",
+        existingAccessory.displayName,
+      );
       new DigitalIntercomPlatformAccessory(this, existingAccessory);
     } else {
       // the accessory does not yet exist, so we need to create it
-      this.log.info('Adding new accessory:', accessoryName);
+      this.log.info("Adding new accessory:", accessoryName);
 
       // create a new accessory
       const accessory = new this.api.platformAccessory(accessoryName, uuid);
       new DigitalIntercomPlatformAccessory(this, accessory);
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
+        accessory,
+      ]);
     }
   }
 }

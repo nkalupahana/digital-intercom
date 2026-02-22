@@ -1,4 +1,4 @@
-declare module 'homebridge-lib/EveHomeKitTypes' {
+declare module "homebridge-lib/EveHomeKitTypes" {
   export class EveHomeKitTypes {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(homebridge: any);
@@ -10,5 +10,4 @@ declare module 'homebridge-lib/EveHomeKitTypes' {
   }
 }
 
-declare module 'homebridge-lib' {
-}
+declare module "homebridge-lib" {}
