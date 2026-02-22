@@ -105,6 +105,7 @@ generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                                        deviceInfo, 8, deviceKey,
                                        sizeof(deviceKey)));
   printHex("Device Key: ", {deviceKey, sizeof(deviceKey)});
+  printHex("Reader Key: ", {readerKey, sizeof(readerKey)});
 
   static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
   CHECK_CRYPTO_RETURN_OPT(
