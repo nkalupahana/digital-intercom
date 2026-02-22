@@ -236,8 +236,8 @@ bool encodeReaderPublicKey(CborEncoder *encoder) {
       "Failed to add value for key -3",
       cbor_encode_byte_string(&mapEncoder, ySpan.data(), ySpan.size()));
 
-  CHECK_CBOR_RETURN_BOOL("Failed to close map",
-                         cbor_encoder_close_container(encoder, &mapEncoder));
+  CHECK_CBOR_RETURN_BOOL("Failed to close map", cbor_encoder_close_container(
+                                                    &tmpEncoder, &mapEncoder));
 
   size_t numWritten = cbor_encoder_get_buffer_size(&tmpEncoder, buf);
   if (numWritten != ENCODED_READER_PUBLIC_KEY_LENGTH) {
