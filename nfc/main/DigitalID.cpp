@@ -257,6 +257,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
   uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
+  Crypto::generateNewReaderKeypair();
 
   // All CC/NDEF ADPU commands are from the Type 4 Tag Operation Specification
 
