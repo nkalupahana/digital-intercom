@@ -2,7 +2,7 @@
   "name": "homebridge-digital-intercom",
   "displayName": "Homebridge Digital Intercom",
   "type": "module",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Homebridge plugin that integrates with the Digital Intercom system",
   "author": "Nisala Kalupahana",
   "license": "AGPL-3.0",
@@ -23,7 +23,7 @@
     "homebridge": "^1.8.0 || ^2.0.0-beta.0"
   },
   "scripts": {
-    "build": "rimraf ./dist && tsc",
+    "build": "rimraf ./dist && tsc && cp -r assets ./dist",
     "lint": "eslint . --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
     "watch": "npm run build && npm link && nodemon"
