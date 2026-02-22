@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "Digital Intercom",
+  "pluginAlias": "DigitalIntercomHomebridgePlugin",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,
