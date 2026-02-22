@@ -17,6 +17,9 @@
 #include <tlv.h>
 
 namespace DigitalID {
+
+constexpr size_t UNENCRYPTED_BUFFER_SIZE = 5000;
+
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override {
     ESP_LOGI(TAG, "Connected!");
@@ -80,7 +83,7 @@ class ServerToClientCharacteristicCallbacks
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
     ESP_LOGI(TAG, "Subscribed to server to client characteristic!");
-    ESP_LOGI(TAG, "Subvalue: %d\n", subValue);
+    ESP_LOGI(TAG, "Subvalue: %d", subValue);
     NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
                                                subValue);
   };
@@ -91,9 +94,21 @@ class ClientToServerCharacteristicCallbacks
   void onWrite(NimBLECharacteristic *pCharacteristic,
                NimBLEConnInfo &connInfo) override {
     ESP_LOGI(TAG, "Write to client to server characteristic!");
-    printHex("Received value to client to server characteristic: ",
-             {pCharacteristic->getValue().data(),
-              pCharacteristic->getValue().length()});
+    std::span<const uint8_t> encrypted{pCharacteristic->getValue().data(),
+                                       pCharacteristic->getValue().length()};
+    printHex("Received encrypted client to server characteristic: ", encrypted);
+
+    static uint8_t *unencrypted = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
+    static WriteSlice writeSlice(unencrypted, UNENCRYPTED_BUFFER_SIZE);
+    std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
+        Crypto::decryptResponse(encrypted, writeSlice);
+    if (!unencryptedSpanOpt) {
+      ESP_LOGI(TAG, "Didn't decrypt entire response");
+    } else {
+      printHex("Unencrypted client to server characteristic: ",
+               *unencryptedSpanOpt);
+    }
+
     NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
 } clientToServerCharacteristicCallbacks;
@@ -618,8 +633,8 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   printHex("Transcript: ", transcriptSpan);
 
   printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
-  auto encryptedRequestOpt = Crypto::generateEncryptedRequest(
-      {deviceXYPubKeyEncodedBuf}, transcriptSpan);
+  auto encryptedRequestOpt =
+      Crypto::encryptRequest({deviceXYPubKeyEncodedBuf}, transcriptSpan);
   CHECK_RETURN_OPT(encryptedRequestOpt);
   auto encryptedRequestSpan = *encryptedRequestOpt;
 

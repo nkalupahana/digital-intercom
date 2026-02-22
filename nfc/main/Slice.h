@@ -34,6 +34,7 @@ public:
   size_t len() const;
   uint8_t *data() const;
   std::span<const uint8_t> span() const;
+  std::span<const uint8_t> spanAndReset();
 
   void reset();
 

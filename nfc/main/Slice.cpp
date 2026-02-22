@@ -64,6 +64,11 @@ WriteSlice::WriteSlice(uint8_t *data, size_t len)
 size_t WriteSlice::len() const { return startingLen_ - len_; }
 uint8_t *WriteSlice::data() const { return data_ - len(); }
 std::span<const uint8_t> WriteSlice::span() const { return {data(), len()}; }
+std::span<const uint8_t> WriteSlice::spanAndReset() {
+  std::span span = {data(), len()};
+  reset();
+  return span;
+}
 
 void WriteSlice::reset() {
   data_ = data_ - len();

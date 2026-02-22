@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Slice.h"
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -48,7 +49,14 @@ std::optional<std::span<const uint8_t, 16>>
 getIdent(std::span<const uint8_t> encodedDevicePublicKey);
 
 std::optional<std::span<const uint8_t>>
-generateEncryptedRequest(std::span<const uint8_t> deviceXY,
-                         std::span<const uint8_t> transcript);
+encryptRequest(std::span<const uint8_t> deviceXY,
+               std::span<const uint8_t> transcript);
+
+std::optional<std::span<const uint8_t>>
+encryptRequest(std::span<const uint8_t> deviceXY,
+               std::span<const uint8_t> transcript);
+
+std::optional<std::span<const uint8_t>>
+decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice);
 
 } // namespace Crypto
