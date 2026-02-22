@@ -2,7 +2,7 @@
   "name": "homebridge-digital-intercom",
   "displayName": "Homebridge Digital Intercom",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Homebridge plugin that integrates with the Digital Intercom system",
   "author": "Nisala Kalupahana",
   "license": "AGPL-3.0",
