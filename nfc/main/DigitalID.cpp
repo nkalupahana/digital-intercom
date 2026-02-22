@@ -231,7 +231,7 @@ bool encodeReaderPublicKey(CborEncoder *encoder) {
       cbor_encode_byte_string(&mapEncoder, xSpan.data(), xSpan.size()));
 
   CHECK_CBOR_RETURN_BOOL("Failed to add key -3",
-                         cbor_encode_negative_int(&mapEncoder, 2));
+                         cbor_encode_negative_int(&mapEncoder, 3));
   CHECK_CBOR_RETURN_BOOL(
       "Failed to add value for key -3",
       cbor_encode_byte_string(&mapEncoder, ySpan.data(), ySpan.size()));

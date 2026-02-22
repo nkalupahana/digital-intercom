@@ -71,7 +71,6 @@ copyReaderPublicKeyPoints() {
 std::optional<std::span<const uint8_t>>
 generateEncryptedRequest(std::span<const uint8_t> deviceXY,
                          std::span<const uint8_t> transcript) {
-
   CHECK_CRYPTO_RETURN_OPT("Failed to read devicePublicKey",
                           mbedtls_ecp_point_read_binary(group, &devicePublicKey,
                                                         deviceXY.data(),
