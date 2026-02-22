@@ -116,7 +116,9 @@ uint8_t handoverRequestBuf[] = {
     0x65, 0x2E, 0x6F, 0x6F, 0x62, 0x30, 0x02, 0x1C, 0x00, 0x11, 0x07, 0xA4,
     0xB2, 0x31, 0xD2, 0x94, 0x69, 0x0B, 0xA9, 0xF9, 0x4F, 0x3C, 0x09, 0x40,
     0x60, 0x18, 0x82};
-uint8_t fullRequestBuf[Crypto::REQUEST_SIZE + 100];
+constexpr size_t ENCODED_READER_PUBLIC_KEY_LENGTH = 75;
+uint8_t fullRequestBuf[Crypto::REQUEST_SIZE + ENCODED_READER_PUBLIC_KEY_LENGTH +
+                       32];
 auto handoverRequestSpan =
     std::span<const uint8_t>(handoverRequestBuf, sizeof(handoverRequestBuf));
 uint8_t sessionTranscriptBuf[PN532_PACKBUFFSIZ * 3];
@@ -198,9 +200,15 @@ bool checkIfValid() {
 }
 
 bool encodeReaderPublicKey(CborEncoder *encoder) {
+  // First encode to buf and then encode buf to encoder as a byte string
+  // TODO: Try to do something smarter
+  static uint8_t buf[ENCODED_READER_PUBLIC_KEY_LENGTH];
+  CborEncoder tmpEncoder;
+  cbor_encoder_init(&tmpEncoder, buf, sizeof(buf), 0);
+
   CborEncoder mapEncoder;
   CHECK_CBOR_RETURN_BOOL("Failed to create map",
-                         cbor_encoder_create_map(encoder, &mapEncoder, 4));
+                         cbor_encoder_create_map(&tmpEncoder, &mapEncoder, 4));
 
   CHECK_CBOR_RETURN_BOOL("Failed to add key 1",
                          cbor_encode_int(&mapEncoder, 1));
@@ -230,6 +238,17 @@ bool encodeReaderPublicKey(CborEncoder *encoder) {
 
   CHECK_CBOR_RETURN_BOOL("Failed to close map",
                          cbor_encoder_close_container(encoder, &mapEncoder));
+
+  size_t numWritten = cbor_encoder_get_buffer_size(&tmpEncoder, buf);
+  if (numWritten != ENCODED_READER_PUBLIC_KEY_LENGTH) {
+    ESP_LOGE(TAG, "Unexpected encoded reader public key length: %d",
+             numWritten);
+    return false;
+  }
+
+  CHECK_CBOR_RETURN_BOOL(
+      "Failed to write encoded reader public key",
+      cbor_encode_byte_string(encoder, buf, ENCODED_READER_PUBLIC_KEY_LENGTH));
 
   return true;
 }
