@@ -1,4 +1,6 @@
+#include "Arduino.h"
 #include "Crypto.h"
+#include "Esp.h"
 #include "NFC.h"
 #include "Slice.h"
 #include "errors.h"
@@ -93,16 +95,85 @@ class ClientToServerCharacteristicCallbacks
     : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *pCharacteristic,
                NimBLEConnInfo &connInfo) override {
+    NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
     ESP_LOGI(TAG, "Write to client to server characteristic!");
-    printHex("ORIGINAL: Received value to client to server characteristic: ",
-             {pCharacteristic->getValue().data(),
-              pCharacteristic->getValue().length()});
-    const auto &attValue = pCharacteristic->getValue();
-    std::span<const uint8_t> encrypted{attValue.data(), attValue.size()};
-    printHex("Received encrypted client to server characteristic: ", encrypted);
 
-    // static uint8_t *unencrypted = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
-    // static WriteSlice writeSlice(unencrypted, UNENCRYPTED_BUFFER_SIZE);
+    const auto &attValue = pCharacteristic->getValue();
+    std::span<const uint8_t> chunk{attValue.data(), attValue.size()};
+    printHex("Received encrypted client to server characteristic: ", chunk);
+    if (chunk.size() == 0) {
+      ESP_LOGE(TAG, "Received empty chunk");
+    }
+
+    static uint8_t *messageBuffer = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
+    static WriteSlice writeSlice(messageBuffer, UNENCRYPTED_BUFFER_SIZE);
+    std::span<const uint8_t> message;
+    switch (chunk[0]) {
+    case 0:
+      ESP_LOGI(TAG, "Received complete message");
+      if (writeSlice.len() == 0) {
+        message = chunk.subspan(1);
+      } else {
+        writeSlice.append(chunk.subspan(1));
+        message = writeSlice.spanAndReset();
+      }
+      break;
+    case 1:
+      ESP_LOGI(TAG, "Received partial message");
+      writeSlice.append(chunk.subspan(1));
+      return;
+    default:
+      ESP_LOGE(TAG, "Unknown message type: %d", chunk[0]);
+      return;
+    };
+
+    CborParser parser;
+    CborValue value;
+    CHECK_CBOR_RETURN(
+        "CBOR parser fialed to initialize",
+        cbor_parser_init(message.data(), message.size(), 0, &parser, &value));
+    CHECK_PRINT_RETURN("CBOR value is not map", cbor_value_is_map(&value));
+    CHECK_CBOR_RETURN("Failed to enter map",
+                      cbor_value_enter_container(&value, &value));
+    bool statusFound = false, dataFound = false;
+    while (!cbor_value_at_end(&value) && (!statusFound || !dataFound)) {
+      bool result;
+      CHECK_CBOR_RETURN(
+          "Failed to check if key is status",
+          cbor_value_text_string_equals(&value, "status", &result));
+      if (result) {
+        CHECK_CBOR_RETURN("Failed to advance past status key",
+                          cbor_value_advance(&value));
+        CHECK_PRINT_RETURN("status is not integer",
+                           cbor_value_is_integer(&value));
+        int status;
+        cbor_value_get_int(&value, &status);
+        ESP_LOGI(TAG, "Got chunk of status: %d", status);
+        CHECK_CBOR_RETURN("Failed to advance past status value",
+                          cbor_value_advance(&value));
+
+        statusFound = true;
+      } else {
+        CHECK_CBOR_RETURN(
+            "Failed to check if key is data",
+            cbor_value_text_string_equals(&value, "data", &result));
+        if (result) {
+          CHECK_CBOR_RETURN("Failed to advance past data key",
+                            cbor_value_advance(&value));
+          CHECK_PRINT_RETURN("data is not byte string",
+                             cbor_value_is_byte_string(&value));
+          // TODO: Get data out
+
+          CHECK_CBOR_RETURN("Failed to advance past data value",
+                            cbor_value_advance(&value));
+
+          dataFound = true;
+        }
+      }
+
+      CHECK_CBOR_RETURN("Failed to advance", cbor_value_advance(&value));
+    }
+
     // std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
     //     Crypto::decryptResponse(encrypted, writeSlice);
     // if (!unencryptedSpanOpt) {
@@ -111,8 +182,6 @@ class ClientToServerCharacteristicCallbacks
     //   printHex("Unencrypted client to server characteristic: ",
     //            *unencryptedSpanOpt);
     // }
-
-    NimBLECharacteristicCallbacks::onWrite(pCharacteristic, connInfo);
   };
 } clientToServerCharacteristicCallbacks;
 

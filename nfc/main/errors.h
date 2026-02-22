@@ -63,6 +63,9 @@
     }                                                                          \
   } while (0)
 
+#define CHECK_CBOR_RETURN(error_string, code, ...)                             \
+  CHECK_CBOR_RETURN_VAL(error_string, code, , __VA_ARGS__)
+
 #define CHECK_CBOR_RETURN_BOOL(error_string, code, ...)                        \
   CHECK_CBOR_RETURN_VAL(error_string, code, false, __VA_ARGS__)
 
