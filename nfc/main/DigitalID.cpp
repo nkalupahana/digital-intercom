@@ -126,6 +126,7 @@ class ClientToServerCharacteristicCallbacks
       ESP_LOGE(TAG, "Unknown message type: %d", chunk[0]);
       return;
     };
+    printHex("Got complete message", message);
 
     CborParser parser;
     CborValue value;
