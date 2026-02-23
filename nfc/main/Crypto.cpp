@@ -157,11 +157,6 @@ decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice) {
   size_t encryptedLen = dataLen - TAG_SIZE;
   mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256);
 
-  printHex("Encrypted: ", {encrypted.data(), encryptedLen});
-  printHex("Device Key: ", {deviceKey, sizeof(deviceKey)});
-  printHex("iv: ", {iv, sizeof(iv)});
-  printHex("tag: ", tag);
-
   uint8_t *outputPtr = outputSlice.deferAppend(encryptedLen);
   CHECK_CRYPTO_RETURN_OPT(
       "Failed to decrypt",

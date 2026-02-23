@@ -186,7 +186,6 @@ class ClientToServerCharacteristicCallbacks
     CHECK_PRINT_RETURN("Failed to find data or status in message", found);
 
     std::span<const uint8_t> encryptedSpan{encrypted, encryptedLen};
-    printHex("Found encrypted data: ", encryptedSpan);
 
     writeSlice.reset();
     // mbedtls allows the input and output buffers to overlap, but the output
