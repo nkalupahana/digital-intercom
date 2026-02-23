@@ -148,7 +148,8 @@ class ClientToServerCharacteristicCallbacks
                            cbor_value_is_byte_string(&value));
 
         // Hopefully all of data is one chunk. If not, fail
-        CHECK_CBOR_RETURN("Failed to get first data string chunk",
+        cbor_value_begin_string_iteration(&value);
+        CHECK_CBOR_RETURN("Failed to get data string chunk",
                           cbor_value_get_byte_string_chunk(
                               &value, &encrypted, &encryptedLen, &value));
         const uint8_t *next;
