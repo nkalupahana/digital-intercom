@@ -38,10 +38,10 @@
     int error = code;                                                          \
     if (error != 0) {                                                          \
       const char *highLevel = mbedtls_high_level_strerr(error);                \
-      const char *lowLevel = mbedtls_high_level_strerr(error);                 \
+      const char *lowLevel = mbedtls_low_level_strerr(error);                  \
       ESP_LOGE(TAG,                                                            \
-               error_string " - Error %x: %s : %s" __VA_OPT__(, ) __VA_ARGS__, \
-               error, highLevel ? highLevel : "<MISSING>",                     \
+               error_string " - Error %s : %s" __VA_OPT__(, ) __VA_ARGS__,     \
+               highLevel ? highLevel : "<MISSING>",                            \
                lowLevel ? lowLevel : "<MISSING>");                             \
       return val;                                                              \
     }                                                                          \
