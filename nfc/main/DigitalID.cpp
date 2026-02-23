@@ -159,9 +159,6 @@ class ClientToServerCharacteristicCallbacks
         if (err != CborErrorNoMoreStringChunks) {
           ESP_LOGE(TAG, "Unable to handle more than one string chunk");
         }
-
-        CHECK_CBOR_RETURN("Failed to advance past data value",
-                          cbor_value_advance(&value));
         break;
       }
 
@@ -188,13 +185,16 @@ class ClientToServerCharacteristicCallbacks
     }
     CHECK_PRINT_RETURN("Failed to find data or status in message", found);
 
+    std::span<const uint8_t> encryyptedSpan{encrypted, encryptedLen};
+    printHex("Found encrypted data: ", encryyptedSpan);
+
     writeSlice.reset();
     // mbedtls allows the input and output buffers to overlap, but the output
     // buffer must trail at least 8 bytes behind the input buffer
     CHECK_PRINT_RETURN("Unable to share buffer for decryption",
                        writeSlice.data() + 8 <= encrypted);
     std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
-        Crypto::decryptResponse({encrypted, encryptedLen}, writeSlice);
+        Crypto::decryptResponse(encryyptedSpan, writeSlice);
     if (!unencryptedSpanOpt) {
       ESP_LOGI(TAG, "Didn't decrypt entire response");
     } else {
