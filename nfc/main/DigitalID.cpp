@@ -185,8 +185,8 @@ class ClientToServerCharacteristicCallbacks
     }
     CHECK_PRINT_RETURN("Failed to find data or status in message", found);
 
-    std::span<const uint8_t> encryyptedSpan{encrypted, encryptedLen};
-    printHex("Found encrypted data: ", encryyptedSpan);
+    std::span<const uint8_t> encryptedSpan{encrypted, encryptedLen};
+    printHex("Found encrypted data: ", encryptedSpan);
 
     writeSlice.reset();
     // mbedtls allows the input and output buffers to overlap, but the output
@@ -194,7 +194,7 @@ class ClientToServerCharacteristicCallbacks
     CHECK_PRINT_RETURN("Unable to share buffer for decryption",
                        writeSlice.data() + 8 <= encrypted);
     std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
-        Crypto::decryptResponse(encryyptedSpan, writeSlice);
+        Crypto::decryptResponse(encryptedSpan, writeSlice);
     if (!unencryptedSpanOpt) {
       ESP_LOGI(TAG, "Didn't decrypt entire response");
     } else {
