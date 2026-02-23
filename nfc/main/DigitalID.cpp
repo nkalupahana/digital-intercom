@@ -165,11 +165,11 @@ class ClientToServerCharacteristicCallbacks
         // Hopefully all of data is one chunk. If not, fail
         const uint8_t *next = nullptr;
         size_t nextLen;
-        CHECK_CBOR_RETURN("Failed to get data string chunk",
+        CHECK_CBOR_RETURN("Failed to get first data string chunk",
                           cbor_value_get_byte_string_chunk(
                               &value, &encrypted, &encryptedLen, &value));
         CHECK_CBOR_RETURN(
-            "Failed to get data string chunk",
+            "Failed to get second data string chunk",
             cbor_value_get_byte_string_chunk(&value, &next, &nextLen, &value));
         CHECK_PRINT_RETURN("Unable to handle more than one string chunk",
                            next == nullptr);
