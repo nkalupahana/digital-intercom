@@ -139,6 +139,31 @@ class ClientToServerCharacteristicCallbacks
                       cbor_value_enter_container(&value, &value));
     bool found = false;
     while (!cbor_value_at_end(&value)) {
+      CHECK_CBOR_RETURN("Failed to check if key is data",
+                        cbor_value_text_string_equals(&value, "data", &found));
+      if (found) {
+        CHECK_CBOR_RETURN("Failed to advance past data key",
+                          cbor_value_advance(&value));
+        CHECK_PRINT_RETURN("data is not byte string",
+                           cbor_value_is_byte_string(&value));
+
+        // Hopefully all of data is one chunk. If not, fail
+        CHECK_CBOR_RETURN("Failed to get first data string chunk",
+                          cbor_value_get_byte_string_chunk(
+                              &value, &encrypted, &encryptedLen, &value));
+        const uint8_t *next;
+        size_t nextLen;
+        CborError err =
+            cbor_value_get_byte_string_chunk(&value, &next, &nextLen, &value);
+        if (err != CborErrorNoMoreStringChunks) {
+          ESP_LOGE(TAG, "Unable to handle more than one string chunk");
+        }
+
+        CHECK_CBOR_RETURN("Failed to advance past data value",
+                          cbor_value_advance(&value));
+        break;
+      }
+
       CHECK_CBOR_RETURN(
           "Failed to check if key is status",
           cbor_value_text_string_equals(&value, "status", &found));
@@ -154,30 +179,7 @@ class ClientToServerCharacteristicCallbacks
                           cbor_value_advance(&value));
         break;
       }
-      CHECK_CBOR_RETURN("Failed to check if key is data",
-                        cbor_value_text_string_equals(&value, "data", &found));
-      if (found) {
-        CHECK_CBOR_RETURN("Failed to advance past data key",
-                          cbor_value_advance(&value));
-        CHECK_PRINT_RETURN("data is not byte string",
-                           cbor_value_is_byte_string(&value));
 
-        // Hopefully all of data is one chunk. If not, fail
-        const uint8_t *next = nullptr;
-        size_t nextLen;
-        CHECK_CBOR_RETURN("Failed to get first data string chunk",
-                          cbor_value_get_byte_string_chunk(
-                              &value, &encrypted, &encryptedLen, &value));
-        CHECK_CBOR_RETURN(
-            "Failed to get second data string chunk",
-            cbor_value_get_byte_string_chunk(&value, &next, &nextLen, &value));
-        CHECK_PRINT_RETURN("Unable to handle more than one string chunk",
-                           next == nullptr);
-
-        CHECK_CBOR_RETURN("Failed to advance past data value",
-                          cbor_value_advance(&value));
-        break;
-      }
       CHECK_CBOR_RETURN("Failed to advance past key",
                         cbor_value_advance(&value));
       CHECK_CBOR_RETURN("Failed to advance past value",
