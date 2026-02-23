@@ -145,49 +145,26 @@ encryptRequest(std::span<const uint8_t> deviceXY,
 std::optional<std::span<const uint8_t>>
 decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice) {
   size_t dataLen = encrypted.size();
-  // mbedtls requires a 16 byte aligned buffer
-  if (dataLen == 0 || dataLen % 16 != 0) {
+  if (dataLen == 0) {
     ESP_LOGE(TAG, "Invalid encrypted response size: %d", dataLen);
     return std::nullopt;
   }
 
-  static bool isStreamEncrypting = false;
   // First 8 bytes is identifier and last 4 bytes is the sequence number
   static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1};
 
-  bool isDone;
-  switch (encrypted[0]) {
-  case 0:
-    isDone = true;
-    break;
-  case 1:
-    isDone = false;
-    break;
-  default:
-    ESP_LOGE(TAG, "Unexpected encrypted response type: %02x", encrypted[0]);
-    return std::nullopt;
-  }
+  std::span<const uint8_t, TAG_SIZE> tag = encrypted.last<16>();
+  size_t encryptedLen = dataLen - TAG_SIZE;
+  mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256);
 
-  if (!isStreamEncrypting && isDone) {
-    // The entire payload was sent in a single MTU
-    outputSlice.reset();
-    iv[sizeof(iv) - 1] = 1;
-    std::span<const uint8_t, TAG_SIZE> tag = encrypted.last<16>();
-    size_t encryptedLen = dataLen - TAG_SIZE;
-    mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256);
-    uint8_t *outputPtr = outputSlice.deferAppend(encryptedLen);
-    CHECK_CRYPTO_RETURN_OPT(
-        "Failed to decrypt",
-        mbedtls_gcm_auth_decrypt(&gcmCtx, encryptedLen, iv, sizeof(iv), nullptr,
-                                 0, tag.data(), tag.size(), encrypted.data(),
-                                 outputPtr));
+  uint8_t *outputPtr = outputSlice.deferAppend(encryptedLen);
+  CHECK_CRYPTO_RETURN_OPT(
+      "Failed to decrypt",
+      mbedtls_gcm_auth_decrypt(&gcmCtx, encryptedLen, iv, sizeof(iv), nullptr,
+                               0, tag.data(), tag.size(), encrypted.data(),
+                               outputPtr));
 
-    return outputSlice.spanAndReset();
-  }
-
-  ESP_LOGE(TAG, "Unsupported decryption - isStreamEncryping: %d isDone: %d",
-           isStreamEncrypting, isDone);
-  return std::nullopt;
+  return outputSlice.spanAndReset();
 }
 
 } // namespace Crypto

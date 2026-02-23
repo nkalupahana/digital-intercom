@@ -1,6 +1,5 @@
 #include "Arduino.h"
 #include "Crypto.h"
-#include "Esp.h"
 #include "NFC.h"
 #include "Slice.h"
 #include "errors.h"
@@ -20,7 +19,7 @@
 
 namespace DigitalID {
 
-constexpr size_t UNENCRYPTED_BUFFER_SIZE = 5000;
+constexpr size_t RESPONSE_BUFFER_SIZE = 5000;
 
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override {
@@ -105,8 +104,8 @@ class ClientToServerCharacteristicCallbacks
       ESP_LOGE(TAG, "Received empty chunk");
     }
 
-    static uint8_t *messageBuffer = new uint8_t[UNENCRYPTED_BUFFER_SIZE];
-    static WriteSlice writeSlice(messageBuffer, UNENCRYPTED_BUFFER_SIZE);
+    static uint8_t *messageBuffer = new uint8_t[RESPONSE_BUFFER_SIZE];
+    static WriteSlice writeSlice(messageBuffer, RESPONSE_BUFFER_SIZE);
     std::span<const uint8_t> message;
     switch (chunk[0]) {
     case 0:
@@ -126,8 +125,10 @@ class ClientToServerCharacteristicCallbacks
       ESP_LOGE(TAG, "Unknown message type: %d", chunk[0]);
       return;
     };
-    printHex("Got complete message", message);
+    printHex("Got complete message ", message);
 
+    const uint8_t *encrypted = nullptr;
+    size_t encryptedLen;
     CborParser parser;
     CborValue value;
     CHECK_CBOR_RETURN(
@@ -136,53 +137,67 @@ class ClientToServerCharacteristicCallbacks
     CHECK_PRINT_RETURN("CBOR value is not map", cbor_value_is_map(&value));
     CHECK_CBOR_RETURN("Failed to enter map",
                       cbor_value_enter_container(&value, &value));
-    bool statusFound = false, dataFound = false;
-    while (!cbor_value_at_end(&value) && (!statusFound || !dataFound)) {
-      bool result;
+    bool found = false;
+    while (!cbor_value_at_end(&value)) {
       CHECK_CBOR_RETURN(
           "Failed to check if key is status",
-          cbor_value_text_string_equals(&value, "status", &result));
-      if (result) {
+          cbor_value_text_string_equals(&value, "status", &found));
+      if (found) {
         CHECK_CBOR_RETURN("Failed to advance past status key",
                           cbor_value_advance(&value));
         CHECK_PRINT_RETURN("status is not integer",
                            cbor_value_is_integer(&value));
         int status;
         cbor_value_get_int(&value, &status);
-        ESP_LOGI(TAG, "Got chunk of status: %d", status);
+        ESP_LOGI(TAG, "Got message with status: %d", status);
         CHECK_CBOR_RETURN("Failed to advance past status value",
                           cbor_value_advance(&value));
-
-        statusFound = true;
-      } else {
-        CHECK_CBOR_RETURN(
-            "Failed to check if key is data",
-            cbor_value_text_string_equals(&value, "data", &result));
-        if (result) {
-          CHECK_CBOR_RETURN("Failed to advance past data key",
-                            cbor_value_advance(&value));
-          CHECK_PRINT_RETURN("data is not byte string",
-                             cbor_value_is_byte_string(&value));
-          // TODO: Get data out
-
-          CHECK_CBOR_RETURN("Failed to advance past data value",
-                            cbor_value_advance(&value));
-
-          dataFound = true;
-        }
+        break;
       }
+      CHECK_CBOR_RETURN("Failed to check if key is data",
+                        cbor_value_text_string_equals(&value, "data", &found));
+      if (found) {
+        CHECK_CBOR_RETURN("Failed to advance past data key",
+                          cbor_value_advance(&value));
+        CHECK_PRINT_RETURN("data is not byte string",
+                           cbor_value_is_byte_string(&value));
 
-      CHECK_CBOR_RETURN("Failed to advance", cbor_value_advance(&value));
+        // Hopefully all of data is one chunk. If not, fail
+        const uint8_t *next = nullptr;
+        size_t nextLen;
+        CHECK_CBOR_RETURN("Failed to get data string chunk",
+                          cbor_value_get_byte_string_chunk(
+                              &value, &encrypted, &encryptedLen, &value));
+        CHECK_CBOR_RETURN(
+            "Failed to get data string chunk",
+            cbor_value_get_byte_string_chunk(&value, &next, &nextLen, &value));
+        CHECK_PRINT_RETURN("Unable to handle more than one string chunk",
+                           next == nullptr);
+
+        CHECK_CBOR_RETURN("Failed to advance past data value",
+                          cbor_value_advance(&value));
+        break;
+      }
+      CHECK_CBOR_RETURN("Failed to advance past key",
+                        cbor_value_advance(&value));
+      CHECK_CBOR_RETURN("Failed to advance past value",
+                        cbor_value_advance(&value));
     }
+    CHECK_PRINT_RETURN("Failed to find data or status in message", found);
 
-    // std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
-    //     Crypto::decryptResponse(encrypted, writeSlice);
-    // if (!unencryptedSpanOpt) {
-    //   ESP_LOGI(TAG, "Didn't decrypt entire response");
-    // } else {
-    //   printHex("Unencrypted client to server characteristic: ",
-    //            *unencryptedSpanOpt);
-    // }
+    writeSlice.reset();
+    // mbedtls allows the input and output buffers to overlap, but the output
+    // buffer must trail at least 8 bytes behind the input buffer
+    CHECK_PRINT_RETURN("Unable to share buffer for decryption",
+                       writeSlice.data() + 8 <= encrypted);
+    std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
+        Crypto::decryptResponse({encrypted, encryptedLen}, writeSlice);
+    if (!unencryptedSpanOpt) {
+      ESP_LOGI(TAG, "Didn't decrypt entire response");
+    } else {
+      printHex("Unencrypted client to server characteristic: ",
+               *unencryptedSpanOpt);
+    }
   };
 } clientToServerCharacteristicCallbacks;
 
