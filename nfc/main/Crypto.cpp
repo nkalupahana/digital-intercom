@@ -153,11 +153,11 @@ decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice) {
   // First 8 bytes is identifier and last 4 bytes is the sequence number
   static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1};
 
-  std::span<const uint8_t, TAG_SIZE> tag = encrypted.last<16>();
+  std::span<const uint8_t, TAG_SIZE> tag = encrypted.last<TAG_SIZE>();
   size_t encryptedLen = dataLen - TAG_SIZE;
   mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256);
 
-  printHex("Encrypted: ", encrypted);
+  printHex("Encrypted: ", {encrypted.data(), encryptedLen});
   printHex("iv: ", {iv, sizeof(iv)});
   printHex("tag: ", tag);
 
