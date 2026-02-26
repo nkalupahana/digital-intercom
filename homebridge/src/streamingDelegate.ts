@@ -19,7 +19,7 @@ import {
 } from "homebridge";
 import { DigitalIntercomPlatformAccessory } from "./platformAccessory.js";
 import getPort from "get-port";
-import { ChildProcess, exec } from "node:child_process";
+import { ChildProcess, spawn } from "node:child_process";
 import {
   FfmpegCodecs,
   FfmpegOptions,
@@ -29,10 +29,17 @@ import {
 import { Command } from "./constants.js";
 import sharp from "sharp";
 import pathToFfmpeg from "ffmpeg-for-homebridge";
+import path from "node:path";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
 const ONE_SECOND = 1000;
+
+const snapPath = path.join(
+  new URL("..", import.meta.url).pathname,
+  "assets",
+  "snapshot.png",
+);
 
 type SessionInfo = {
   address: string; // Address of the HAP controller.
@@ -159,7 +166,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: SnapshotRequestCallback,
   ): void {
     console.log("Received snapshot request", request);
-    sharp("assets/snapshot.png")
+    sharp(snapPath)
       .resize(request.width, request.height, { fit: "cover" })
       .toBuffer()
       .then((buffer) => {
@@ -338,10 +345,9 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     console.log("Starting stream", request);
     this.accessory.sendCommand(Command.LISTEN_ON);
-    const shell = process.platform === "win32" ? "powershell" : undefined;
     // 1. INPUT GENERATORS
     // const videoInput = `-f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
-    const videoInput = `-f lavfi -i "movie=assets/snapshot.png:loop=0,setpts=N/(${request.video.fps}*TB)"`;
+    const videoInput = `-f lavfi -i "movie=${snapPath}:loop=0,setpts=N/(${request.video.fps}*TB)"`;
 
     // Replace anullsrc with sine wave generator
     // f=1000 sets the pitch to 1kHz
@@ -368,15 +374,8 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     // 4. FINAL ASSEMBLY
     // const debugFlag = this.platform.debugMode ? ' -loglevel debug' : '';
     const fcmd = `${videoInput} ${audioInput}${ffmpegVideoArgs}${ffmpegVideoStream}${ffmpegAudioFull}`;
-    const ffmpegProcess = exec(
-      `${pathToFfmpeg} ${fcmd}`,
-      { shell },
-      // (error, stdout, stderr) => {
-      //   console.log("error", error);
-      //   console.log("stdout", stdout);
-      //   console.log("stderr", stderr);
-      // },
-    );
+    // TODO: refactor so the binary spawned is pathToFfmpeg and the args are an array
+    const ffmpegProcess = spawn("/bin/bash", ["-c", `${pathToFfmpeg} ${fcmd}`]);
 
     const sdpIpVersion = sessionInfo.addressVersion === "ipv6" ? "IP6" : "IP4";
 
@@ -435,15 +434,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     // TODO: handle no socket address
 
-    const returnFfmpegProcess = exec(
-      `${pathToFfmpeg} ${ffmpegReturnAudioCmd.join(" ")}`,
-      { shell },
-      // (error, stdout, stderr) => {
-      //   console.log("error", error);
-      //   console.log("stdout", stdout);
-      //   console.log("stderr", stderr);
-      // },
-    );
+    const returnFfmpegProcess = spawn(`${pathToFfmpeg}}`, ffmpegReturnAudioCmd);
     returnFfmpegProcess.stdin?.end(sdpReturnAudio + "\n");
 
     this.activeSession = {

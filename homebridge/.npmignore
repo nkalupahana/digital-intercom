@@ -136,5 +136,4 @@ web_modules/
 test/
 
 # source assets
-assets/*
 *.af
