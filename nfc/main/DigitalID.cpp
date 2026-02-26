@@ -242,6 +242,9 @@ class ClientToServerCharacteristicCallbacks
     CHECK_CBOR_RETURN("Failed to enter array",
                       cbor_value_enter_container(&decryptValue, &decryptValue));
 
+    size_t givenNameLen = 50, familyNameLen = 50, birthDateLen = 50;
+    char givenName[givenNameLen], familyName[familyNameLen],
+        birthDate[birthDateLen];
     for (size_t i = 0; i < arraySize; ++i) {
       CHECK_PRINT_RETURN("value is not tagged",
                          cbor_value_is_tag(&decryptValue));
@@ -265,7 +268,7 @@ class ClientToServerCharacteristicCallbacks
                         cbor_value_finish_string_iteration(&decryptValue));
 
       CborParser chunkParser;
-      CborValue chunkValue;
+      CborValue chunkValue, itemValue;
       CHECK_CBOR_RETURN(
           "CBOR parser failed to initialize",
           cbor_parser_init(chunk, chunkLen, 0, &chunkParser, &chunkValue));
@@ -274,19 +277,62 @@ class ClientToServerCharacteristicCallbacks
       // get key elementIdentifier
       CHECK_CBOR_RETURN("Failed to get key elementIdentifier",
                         cbor_value_map_find_value(
-                            &chunkValue, "elementIdentifier", &chunkValue));
+                            &chunkValue, "elementIdentifier", &itemValue));
       CHECK_PRINT_RETURN("elementIdentifier is not a string",
-                         cbor_value_is_text_string(&chunkValue));
+                         cbor_value_is_text_string(&itemValue));
       size_t elementIdentifierLen = 50;
       char elementIdentifier[elementIdentifierLen];
       CHECK_CBOR_RETURN(
           "Failed to get elementIdentifier",
-          cbor_value_copy_text_string(&chunkValue, elementIdentifier,
-                                      &elementIdentifierLen, &chunkValue));
+          cbor_value_copy_text_string(&itemValue, elementIdentifier,
+                                      &elementIdentifierLen, &itemValue));
       std::string_view elementIdentifierView(elementIdentifier,
                                              elementIdentifierLen);
+
+      // get key elementValue
+      CHECK_CBOR_RETURN(
+          "Failed to get key elementValue",
+          cbor_value_map_find_value(&chunkValue, "elementValue", &itemValue));
+
+      char *buffer = nullptr;
+      size_t *bufferLen = 0;
       Serial.printf("Element identifier: %s\n", elementIdentifierView.data());
+      if (elementIdentifierView.contains("given_name")) {
+        buffer = givenName;
+        bufferLen = &givenNameLen;
+      } else if (elementIdentifierView.contains("family_name")) {
+        buffer = familyName;
+        bufferLen = &familyNameLen;
+      } else if (elementIdentifierView.contains("birth_date")) {
+        buffer = birthDate;
+        bufferLen = &birthDateLen;
+        // For digital ID, birth date the value is wrapped in another map, so we
+        // need to advance itemValue to that location
+        if (!cbor_value_is_tag(&itemValue)) {
+          CHECK_PRINT_RETURN("birth_date is not tag+string nor map",
+                             cbor_value_is_map(&itemValue));
+          CHECK_CBOR_RETURN(
+              "Failed to get key birth_date",
+              cbor_value_map_find_value(&itemValue, "birth_date", &itemValue));
+        }
+        // Birth date has a random tag before the data
+        CHECK_CBOR_RETURN("Failed to skip tag",
+                          cbor_value_skip_tag(&itemValue));
+      } else {
+        ESP_LOGE(TAG, "Unknown element identifier: %s",
+                 elementIdentifierView.data());
+        continue;
+      }
+      // Sometimes there's a random tag before the data
+      CHECK_PRINT_RETURN("elementValue is not a string",
+                         cbor_value_is_text_string(&itemValue));
+      CHECK_CBOR_RETURN("Failed to copy elementValue",
+                        cbor_value_copy_text_string(&itemValue, buffer,
+                                                    bufferLen, &itemValue));
     }
+    ESP_LOGI(TAG, "Given name: %s", givenName);
+    ESP_LOGI(TAG, "Family name: %s", familyName);
+    ESP_LOGI(TAG, "Birth date: %s", birthDate);
   };
 } clientToServerCharacteristicCallbacks;
 
