@@ -30,6 +30,13 @@ export class DoorLockPlatformAccessory {
       .onGet(() => {
         // stateless -- always shows as locked
         return this.platform.Characteristic.LockCurrentState.SECURED;
+      });
+
+    this.service
+      .getCharacteristic(this.platform.Characteristic.LockTargetState)
+      .onGet(() => {
+        // stateless -- always shows as locked
+        return this.platform.Characteristic.LockTargetState.SECURED;
       })
       .onSet((value) => {
         if (value === this.platform.Characteristic.LockTargetState.UNSECURED) {

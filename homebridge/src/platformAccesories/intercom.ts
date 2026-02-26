@@ -24,10 +24,16 @@ export class IntercomPlatformAccessory {
     this.accessory = paccessory;
 
     // Doorbell
-    this.doorbellService =
-      this.accessory.getService(this.hap.Service.Doorbell) ||
-      this.accessory.addService(this.hap.Service.Doorbell);
+    const existingDoorbellService = this.accessory.getService(
+      this.hap.Service.Doorbell,
+    );
+    if (existingDoorbellService) {
+      this.accessory.removeService(existingDoorbellService);
+    }
 
+    this.doorbellService = new this.hap.Service.Doorbell(
+      this.accessory.displayName,
+    );
     this.doorbellService.setPrimaryService(true);
 
     this.accessory
