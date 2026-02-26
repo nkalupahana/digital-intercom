@@ -491,7 +491,7 @@ bool encodeReaderPublicKey(CborEncoder *encoder) {
   return true;
 }
 
-std::optional<std::span<const uint8_t>> performHandoff() {
+void performHandoff() {
   std::optional<ReadSlice> readSliceOpt;
   ReadSlice readSlice{nullptr, 0};
   uint8_t ndefPayloadBuf[PN532_PACKBUFFSIZ];
@@ -501,67 +501,66 @@ std::optional<std::span<const uint8_t>> performHandoff() {
 
   // SELECT CC
   writeSlice.reset();
-  CHECK_RETURN_OPT(
+  CHECK_RETURN(
       writeSlice.appendApduCommand(0x00, 0xA4, 0x00, 0x0C, {{0xE1, 0x03}}));
   readSliceOpt =
       NFC::exchangeData("Sending SELECT CC File: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
+  CHECK_RETURN(readSliceOpt);
   readSlice = *readSliceOpt;
 
   printHex("Select CC file: ", readSlice.span());
 
   // Read CC
   auto ccData = readNdefFile(true);
-  CHECK_RETURN_OPT(ccData);
+  CHECK_RETURN(ccData);
   auto ccDataSpan = std::span<const uint8_t>(*ccData);
   // Based on spec, CC data should be at least 13 bytes
   // (15 bytes - 2 bytes for length at beginning)
-  CHECK_PRINT_RETURN_OPT("CC data is not at least 13 bytes",
-                         ccDataSpan.size() >= 13);
+  CHECK_PRINT_RETURN("CC data is not at least 13 bytes",
+                     ccDataSpan.size() >= 13);
   auto ccTlvSpan = ccDataSpan.subspan(5, ccDataSpan.size() - 5);
   printHex("CC TLV: ", ccTlvSpan);
   TLVS tlvs;
   tlvs.decodeTLVs(ccTlvSpan.data(), ccTlvSpan.size());
   TLVNode *fileControlTag = tlvs.findTLV(0x04);
-  CHECK_PRINT_RETURN_OPT("Failed to get file control tag from CC data",
-                         fileControlTag != nullptr);
+  CHECK_PRINT_RETURN("Failed to get file control tag from CC data",
+                     fileControlTag != nullptr);
   std::span<const uint8_t> fileControlValue{fileControlTag->getValue(),
                                             fileControlTag->getValueLength()};
-  CHECK_PRINT_RETURN_OPT("File control tag value is not at least length 2",
-                         fileControlValue.size() >= 2);
+  CHECK_PRINT_RETURN("File control tag value is not at least length 2",
+                     fileControlValue.size() >= 2);
 
   // SELECT NDEF File
   writeSlice.reset();
-  CHECK_RETURN_OPT(writeSlice.appendApduCommand(
+  CHECK_RETURN(writeSlice.appendApduCommand(
       0x00, 0xA4, 0x00, 0x0C, {{fileControlValue[0], fileControlValue[1]}}));
   readSliceOpt =
       NFC::exchangeData("Sending NDEF Select File: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
+  CHECK_RETURN(readSliceOpt);
   readSlice = *readSliceOpt;
 
   // Read NDEF record. Should contain an NDEF record of type Tp (service
   // parameter) with data including "urn:nfc:sn:handover". We may want to
   // parse and verify this more robustly.
   auto initialNdefData = readNdefFile(false);
-  CHECK_RETURN_OPT(initialNdefData);
+  CHECK_RETURN(initialNdefData);
 
   auto initialNdefDataSpan = std::span<const uint8_t>(*initialNdefData);
   auto initialNdefMessage =
       NdefMessage(initialNdefDataSpan.data(), initialNdefDataSpan.size());
-  CHECK_PRINT_RETURN_OPT(
-      "Initial NDEF message does not contain one NDEF record",
-      initialNdefMessage.getRecordCount() == 1);
+  CHECK_PRINT_RETURN("Initial NDEF message does not contain one NDEF record",
+                     initialNdefMessage.getRecordCount() == 1);
   auto serviceParameterRecord = initialNdefMessage.getRecord(0);
-  CHECK_PRINT_RETURN_OPT("Record is not a service parameter",
-                         serviceParameterRecord.getType() == "Tp");
-  CHECK_PRINT_RETURN_OPT("Service parameter payload length is 0",
-                         serviceParameterRecord.getPayloadLength() > 0);
+  CHECK_PRINT_RETURN("Record is not a service parameter",
+                     serviceParameterRecord.getType() == "Tp");
+  CHECK_PRINT_RETURN("Service parameter payload length is 0",
+                     serviceParameterRecord.getPayloadLength() > 0);
   serviceParameterRecord.getPayload(ndefPayloadBuf);
   auto payloadSpan = std::span<const uint8_t>(
       ndefPayloadBuf, serviceParameterRecord.getPayloadLength());
   auto payloadHandoverSearch =
       std::ranges::search(payloadSpan, std::string_view("urn:nfc:sn:handover"));
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_PRINT_RETURN(
       "Handover service not in the service parameter record payload",
       payloadHandoverSearch.size() > 0);
 
@@ -588,19 +587,19 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   printHex("Service Select: ", messageSpan);
 
   writeSlice.reset();
-  CHECK_RETURN_OPT(writeSlice.append(
+  CHECK_RETURN(writeSlice.append(
       {{0x00, 0xD6, 0x00, 0x00, static_cast<uint8_t>(messageSpan.size() + 2), 0,
         static_cast<uint8_t>(messageSpan.size())}}));
   writeSlice.append(messageSpan);
   readSliceOpt = NFC::exchangeData(
       "Writing Service Select message: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
+  CHECK_RETURN(readSliceOpt);
   readSlice = *readSliceOpt;
   printHex("Service Select response: ", readSlice.span());
 
   // Read response
   auto serviceSelectedResponse = readNdefFile(false);
-  CHECK_RETURN_OPT(serviceSelectedResponse);
+  CHECK_RETURN(serviceSelectedResponse);
 
   // From NDEF Exchange Protocol 1.0: 4.3 TNEP Status Message
   // If the NFC Tag Device has received a Service Select Message with a known
@@ -613,33 +612,33 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   auto statusMessage = NdefMessage(serviceSelectedResponseSpan.data(),
                                    serviceSelectedResponseSpan.size());
 
-  CHECK_PRINT_RETURN_OPT(
+  CHECK_PRINT_RETURN(
       "Service selected response does not contain one NDEF record",
       statusMessage.getRecordCount() == 1);
   auto statusRecord = statusMessage.getRecord(0);
-  CHECK_PRINT_RETURN_OPT("Record is not a TNEP Status Message",
-                         statusRecord.getType() == "Te");
-  CHECK_PRINT_RETURN_OPT("Status record payload length is not 1",
-                         statusRecord.getPayloadLength() == 1);
+  CHECK_PRINT_RETURN("Record is not a TNEP Status Message",
+                     statusRecord.getType() == "Te");
+  CHECK_PRINT_RETURN("Status record payload length is not 1",
+                     statusRecord.getPayloadLength() == 1);
   byte statusCode = 0xFF;
   statusRecord.getPayload(&statusCode);
-  CHECK_PRINT_RETURN_OPT("Status code is not 0x00", statusCode == 0x00);
+  CHECK_PRINT_RETURN("Status code is not 0x00", statusCode == 0x00);
 
   // Send handover request
   // Write to file: length + message
   writeSlice.reset();
-  CHECK_RETURN_OPT(writeSlice.append(
+  CHECK_RETURN(writeSlice.append(
       {{0x00, 0xD6, 0x00, 0x00,
         static_cast<uint8_t>(handoverRequestSpan.size() + 2), 0,
         static_cast<uint8_t>(handoverRequestSpan.size())}}));
   writeSlice.append(handoverRequestSpan);
   readSliceOpt =
       NFC::exchangeData("Writing Handover Request: ", writeSlice.span(), rbuf);
-  CHECK_RETURN_OPT(readSliceOpt);
+  CHECK_RETURN(readSliceOpt);
   readSlice = *readSliceOpt;
 
   auto handoverResponse = readNdefFile(false);
-  CHECK_RETURN_OPT(handoverResponse);
+  CHECK_RETURN(handoverResponse);
   printHex("Handover Response: ", *handoverResponse);
 
   auto handoverResponseSpan = std::span<const uint8_t>(*handoverResponse);
@@ -656,65 +655,64 @@ std::optional<std::span<const uint8_t>> performHandoff() {
           std::span<const uint8_t>(ndefPayloadBuf, record.getPayloadLength());
     }
   }
-  CHECK_RETURN_OPT(encodedDeviceEngagementOpt);
+  CHECK_RETURN(encodedDeviceEngagementOpt);
   auto encodedDeviceEngagementSpan = *encodedDeviceEngagementOpt;
   printHex("Encoded device engagement: ", encodedDeviceEngagementSpan);
 
   // Get public key out of device engagement
   CborParser parser;
   CborValue value;
-  CHECK_CBOR_RETURN_OPT("CBOR parser fialed to initialize",
-                        cbor_parser_init(encodedDeviceEngagementSpan.data(),
-                                         encodedDeviceEngagementSpan.size(), 0,
-                                         &parser, &value));
-  CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&value));
-  CHECK_CBOR_RETURN_OPT("Failed to enter map",
-                        cbor_value_enter_container(&value, &value));
+  CHECK_CBOR_RETURN("CBOR parser fialed to initialize",
+                    cbor_parser_init(encodedDeviceEngagementSpan.data(),
+                                     encodedDeviceEngagementSpan.size(), 0,
+                                     &parser, &value));
+  CHECK_PRINT_RETURN("CBOR value is not map", cbor_value_is_map(&value));
+  CHECK_CBOR_RETURN("Failed to enter map",
+                    cbor_value_enter_container(&value, &value));
   bool keyFound = false;
   while (!cbor_value_at_end(&value)) {
     if (cbor_value_is_unsigned_integer(&value)) {
       uint64_t key;
-      CHECK_CBOR_RETURN_OPT("Failed to get key",
-                            cbor_value_get_uint64(&value, &key));
+      CHECK_CBOR_RETURN("Failed to get key",
+                        cbor_value_get_uint64(&value, &key));
       if (key == 1) {
         keyFound = true;
         break;
       }
     }
-    CHECK_CBOR_RETURN_OPT("Failed to advance", cbor_value_advance(&value));
+    CHECK_CBOR_RETURN("Failed to advance", cbor_value_advance(&value));
   }
-  CHECK_PRINT_RETURN_OPT("Key 1 not found", keyFound);
-  CHECK_CBOR_RETURN_OPT("Failed to advance to data",
-                        cbor_value_advance(&value));
-  CHECK_PRINT_RETURN_OPT("Data is not array", cbor_value_is_array(&value));
-  CHECK_CBOR_RETURN_OPT("Failed to enter array",
-                        cbor_value_enter_container(&value, &value));
-  CHECK_PRINT_RETURN_OPT("First value is not uint",
-                         cbor_value_is_unsigned_integer(&value));
+  CHECK_PRINT_RETURN("Key 1 not found", keyFound);
+  CHECK_CBOR_RETURN("Failed to advance to data", cbor_value_advance(&value));
+  CHECK_PRINT_RETURN("Data is not array", cbor_value_is_array(&value));
+  CHECK_CBOR_RETURN("Failed to enter array",
+                    cbor_value_enter_container(&value, &value));
+  CHECK_PRINT_RETURN("First value is not uint",
+                     cbor_value_is_unsigned_integer(&value));
   uint64_t cipherSuiteIdentifier;
-  CHECK_CBOR_RETURN_OPT("Failed to get cipher suite identifier",
-                        cbor_value_get_uint64(&value, &cipherSuiteIdentifier));
-  CHECK_PRINT_RETURN_OPT("Cipher suite identifier is not 1, which is the only "
-                         "identifier we know about",
-                         cipherSuiteIdentifier == 1);
-  CHECK_CBOR_RETURN_OPT("Failed to advance to tagged device public key",
-                        cbor_value_advance(&value));
-  CHECK_PRINT_RETURN_OPT("Tagged device public key is not tagged",
-                         cbor_value_is_tag(&value));
+  CHECK_CBOR_RETURN("Failed to get cipher suite identifier",
+                    cbor_value_get_uint64(&value, &cipherSuiteIdentifier));
+  CHECK_PRINT_RETURN("Cipher suite identifier is not 1, which is the only "
+                     "identifier we know about",
+                     cipherSuiteIdentifier == 1);
+  CHECK_CBOR_RETURN("Failed to advance to tagged device public key",
+                    cbor_value_advance(&value));
+  CHECK_PRINT_RETURN("Tagged device public key is not tagged",
+                     cbor_value_is_tag(&value));
   CborTag devicePublicKeyTag;
-  CHECK_CBOR_RETURN_OPT("Failed to get device public key tag",
-                        cbor_value_get_tag(&value, &devicePublicKeyTag));
-  CHECK_PRINT_RETURN_OPT("device public key tag is not 24",
-                         devicePublicKeyTag == 24);
-  CHECK_CBOR_RETURN_OPT("Failed to advance to device public key",
-                        cbor_value_advance(&value));
-  CHECK_PRINT_RETURN_OPT("device public key is not byte string",
-                         cbor_value_is_byte_string(&value));
+  CHECK_CBOR_RETURN("Failed to get device public key tag",
+                    cbor_value_get_tag(&value, &devicePublicKeyTag));
+  CHECK_PRINT_RETURN("device public key tag is not 24",
+                     devicePublicKeyTag == 24);
+  CHECK_CBOR_RETURN("Failed to advance to device public key",
+                    cbor_value_advance(&value));
+  CHECK_PRINT_RETURN("device public key is not byte string",
+                     cbor_value_is_byte_string(&value));
   size_t devicePublicKeyLength = PN532_PACKBUFFSIZ;
-  CHECK_CBOR_RETURN_OPT("Failed to get device public key",
-                        cbor_value_copy_byte_string(&value, devicePublicKeyBuf,
-                                                    &devicePublicKeyLength,
-                                                    &value));
+  CHECK_CBOR_RETURN("Failed to get device public key",
+                    cbor_value_copy_byte_string(&value, devicePublicKeyBuf,
+                                                &devicePublicKeyLength,
+                                                &value));
   std::span<const uint8_t> devicePublicKeySpan(devicePublicKeyBuf,
                                                devicePublicKeyLength);
   printHex("device public key: ", devicePublicKeySpan);
@@ -723,19 +721,19 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   // This could definintely be improved.
   CborEncoder encoder;
   cbor_encoder_init(&encoder, encodedDevicePublicKeyBuf, PN532_PACKBUFFSIZ, 0);
-  CHECK_CBOR_RETURN_OPT("Failed to encode device public key",
-                        cbor_encode_tag(&encoder, devicePublicKeyTag));
-  CHECK_CBOR_RETURN_OPT("Failed to encode device public key",
-                        cbor_encode_byte_string(&encoder,
-                                                devicePublicKeySpan.data(),
-                                                devicePublicKeySpan.size()));
+  CHECK_CBOR_RETURN("Failed to encode device public key",
+                    cbor_encode_tag(&encoder, devicePublicKeyTag));
+  CHECK_CBOR_RETURN("Failed to encode device public key",
+                    cbor_encode_byte_string(&encoder,
+                                            devicePublicKeySpan.data(),
+                                            devicePublicKeySpan.size()));
   std::span<const uint8_t> encodedDevicePublicKeySpan(
       encodedDevicePublicKeyBuf,
       cbor_encoder_get_buffer_size(&encoder, encodedDevicePublicKeyBuf));
   printHex("Encoded device public key: ", encodedDevicePublicKeySpan);
 
   auto identOpt = Crypto::getIdent(encodedDevicePublicKeySpan);
-  CHECK_PRINT_RETURN_OPT("Failed to construct ident", identOpt);
+  CHECK_PRINT_RETURN("Failed to construct ident", identOpt);
   const auto &ident = *identOpt;
   identCharacteristic->setValue(ident.data(), ident.size());
 
@@ -744,101 +742,97 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   CborValue keyValue;
   std::optional<std::span<const uint8_t>> xSpanOpt = std::nullopt;
   std::optional<std::span<const uint8_t>> ySpanOpt = std::nullopt;
-  CHECK_CBOR_RETURN_OPT("CBOR parser failed to initialize",
-                        cbor_parser_init(devicePublicKeySpan.data(),
-                                         devicePublicKeySpan.size(), 0,
-                                         &keyParser, &keyValue));
-  CHECK_PRINT_RETURN_OPT("CBOR value is not map", cbor_value_is_map(&keyValue));
-  CHECK_CBOR_RETURN_OPT("Failed to enter map",
-                        cbor_value_enter_container(&keyValue, &keyValue));
+  CHECK_CBOR_RETURN("CBOR parser failed to initialize",
+                    cbor_parser_init(devicePublicKeySpan.data(),
+                                     devicePublicKeySpan.size(), 0, &keyParser,
+                                     &keyValue));
+  CHECK_PRINT_RETURN("CBOR value is not map", cbor_value_is_map(&keyValue));
+  CHECK_CBOR_RETURN("Failed to enter map",
+                    cbor_value_enter_container(&keyValue, &keyValue));
   // Find -2 (x) and -3 (y)
   while (!cbor_value_at_end(&keyValue) &&
          (!xSpanOpt.has_value() || !ySpanOpt.has_value())) {
     if (cbor_value_is_negative_integer(&keyValue)) {
       int key;
-      CHECK_CBOR_RETURN_OPT("Failed to get key",
-                            cbor_value_get_int(&keyValue, &key));
+      CHECK_CBOR_RETURN("Failed to get key",
+                        cbor_value_get_int(&keyValue, &key));
       if (key == -2) {
-        CHECK_CBOR_RETURN_OPT("Failed to advance to x",
-                              cbor_value_advance(&keyValue));
-        CHECK_PRINT_RETURN_OPT("x is not byte string",
-                               cbor_value_is_byte_string(&keyValue));
+        CHECK_CBOR_RETURN("Failed to advance to x",
+                          cbor_value_advance(&keyValue));
+        CHECK_PRINT_RETURN("x is not byte string",
+                           cbor_value_is_byte_string(&keyValue));
         size_t xLength = devicePubKeyX.size();
-        CHECK_CBOR_RETURN_OPT("Failed to get x",
-                              cbor_value_copy_byte_string(&keyValue,
-                                                          devicePubKeyX.data(),
-                                                          &xLength, NULL));
-        CHECK_PRINT_RETURN_OPT("x length is not 32", xLength == COORD_LENGTH);
+        CHECK_CBOR_RETURN("Failed to get x",
+                          cbor_value_copy_byte_string(
+                              &keyValue, devicePubKeyX.data(), &xLength, NULL));
+        CHECK_PRINT_RETURN("x length is not 32", xLength == COORD_LENGTH);
         xSpanOpt = devicePubKeyX;
       }
 
       if (key == -3) {
-        CHECK_CBOR_RETURN_OPT("Failed to advance to y",
-                              cbor_value_advance(&keyValue));
-        CHECK_PRINT_RETURN_OPT("y is not byte string",
-                               cbor_value_is_byte_string(&keyValue));
+        CHECK_CBOR_RETURN("Failed to advance to y",
+                          cbor_value_advance(&keyValue));
+        CHECK_PRINT_RETURN("y is not byte string",
+                           cbor_value_is_byte_string(&keyValue));
         size_t yLength = devicePubKeyY.size();
 
-        CHECK_CBOR_RETURN_OPT("Failed to get y",
-                              cbor_value_copy_byte_string(&keyValue,
-                                                          devicePubKeyY.data(),
-                                                          &yLength, NULL));
-        CHECK_PRINT_RETURN_OPT("y length is not 32", yLength == COORD_LENGTH);
+        CHECK_CBOR_RETURN("Failed to get y",
+                          cbor_value_copy_byte_string(
+                              &keyValue, devicePubKeyY.data(), &yLength, NULL));
+        CHECK_PRINT_RETURN("y length is not 32", yLength == COORD_LENGTH);
         ySpanOpt = devicePubKeyY;
       }
     }
 
-    CHECK_CBOR_RETURN_OPT("Failed to advance", cbor_value_advance(&keyValue));
+    CHECK_CBOR_RETURN("Failed to advance", cbor_value_advance(&keyValue));
   }
-  CHECK_PRINT_RETURN_OPT("Failed to get x or y",
-                         xSpanOpt.has_value() && ySpanOpt.has_value());
+  CHECK_PRINT_RETURN("Failed to get x or y",
+                     xSpanOpt.has_value() && ySpanOpt.has_value());
   /// Transcript
   CborEncoder transcriptEncoder;
   cbor_encoder_init(&transcriptEncoder, sessionTranscriptBuf + 5,
                     sizeof(sessionTranscriptBuf) - 5,
                     0); // TODO: clean up offsets
   CborEncoder arrayEncoder;
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to create array",
       cbor_encoder_create_array(&transcriptEncoder, &arrayEncoder, 3));
 
   // 1: Device engagement
-  CHECK_CBOR_RETURN_OPT("Failed to add tag",
-                        cbor_encode_tag(&arrayEncoder, 24));
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN("Failed to add tag", cbor_encode_tag(&arrayEncoder, 24));
+  CHECK_CBOR_RETURN(
       "Failed to add device engagement",
       cbor_encode_byte_string(&arrayEncoder, encodedDeviceEngagementSpan.data(),
                               encodedDeviceEngagementSpan.size()));
   // 2: Reader public key
-  CHECK_CBOR_RETURN_OPT("Failed to add tag",
-                        cbor_encode_tag(&arrayEncoder, 24));
-  CHECK_PRINT_RETURN_OPT("Failed to add reader public key",
-                         encodeReaderPublicKey(&arrayEncoder));
+  CHECK_CBOR_RETURN("Failed to add tag", cbor_encode_tag(&arrayEncoder, 24));
+  CHECK_PRINT_RETURN("Failed to add reader public key",
+                     encodeReaderPublicKey(&arrayEncoder));
   // 3: Handover array
   CborEncoder handoverArrayEncoder;
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to add handover array",
       cbor_encoder_create_array(&arrayEncoder, &handoverArrayEncoder, 2));
   // 3a: Handover select (incorrectly named handover response, TODO fix)
-  CHECK_CBOR_RETURN_OPT("Failed to add handover select",
-                        cbor_encode_byte_string(&handoverArrayEncoder,
-                                                handoverResponseSpan.data(),
-                                                handoverResponseSpan.size()));
+  CHECK_CBOR_RETURN("Failed to add handover select",
+                    cbor_encode_byte_string(&handoverArrayEncoder,
+                                            handoverResponseSpan.data(),
+                                            handoverResponseSpan.size()));
   // 3b: Handover request
-  // CHECK_CBOR_RETURN_OPT("Failed to add handover select",
+  // CHECK_CBOR_RETURN("Failed to add handover select",
   //                        cbor_encode_byte_string(
   //                            &handoverArrayEncoder,
   //                            handoverResponseSpan.data(),
   //                            handoverResponseSpan.size()) );
-  CHECK_CBOR_RETURN_OPT("Failed to add handover request",
-                        cbor_encode_byte_string(&handoverArrayEncoder,
-                                                handoverRequestSpan.data(),
-                                                handoverRequestSpan.size()));
+  CHECK_CBOR_RETURN("Failed to add handover request",
+                    cbor_encode_byte_string(&handoverArrayEncoder,
+                                            handoverRequestSpan.data(),
+                                            handoverRequestSpan.size()));
   // Close containers
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to close handover array",
       cbor_encoder_close_container(&arrayEncoder, &handoverArrayEncoder));
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to close array",
       cbor_encoder_close_container(&transcriptEncoder, &arrayEncoder));
   // Add tag
@@ -858,7 +852,7 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   printHex("Device XY: ", {deviceXYPubKeyEncodedBuf});
   auto encryptedRequestOpt =
       Crypto::encryptRequest({deviceXYPubKeyEncodedBuf}, transcriptSpan);
-  CHECK_RETURN_OPT(encryptedRequestOpt);
+  CHECK_RETURN(encryptedRequestOpt);
   auto encryptedRequestSpan = *encryptedRequestOpt;
 
   // Build full request
@@ -866,28 +860,26 @@ std::optional<std::span<const uint8_t>> performHandoff() {
   cbor_encoder_init(&requestEncoder, fullRequestBuf + 1,
                     sizeof(fullRequestBuf) - 1, 0);
   CborEncoder mapEncoder;
-  CHECK_CBOR_RETURN_OPT(
-      "Failed to create map",
-      cbor_encoder_create_map(&requestEncoder, &mapEncoder, 2));
+  CHECK_CBOR_RETURN("Failed to create map",
+                    cbor_encoder_create_map(&requestEncoder, &mapEncoder, 2));
   auto readerKey = "eReaderKey";
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to reader key",
       cbor_encode_text_string(&mapEncoder, readerKey, strlen(readerKey)));
-  CHECK_CBOR_RETURN_OPT("Failed to add tag for reader public key",
-                        cbor_encode_tag(&mapEncoder, 24));
-  CHECK_PRINT_RETURN_OPT("Failed to add reader public key",
-                         encodeReaderPublicKey(&mapEncoder));
+  CHECK_CBOR_RETURN("Failed to add tag for reader public key",
+                    cbor_encode_tag(&mapEncoder, 24));
+  CHECK_PRINT_RETURN("Failed to add reader public key",
+                     encodeReaderPublicKey(&mapEncoder));
   auto dataKey = "data";
-  CHECK_CBOR_RETURN_OPT(
+  CHECK_CBOR_RETURN(
       "Failed to add data key",
       cbor_encode_text_string(&mapEncoder, dataKey, strlen(dataKey)));
-  CHECK_CBOR_RETURN_OPT("Failed to add data",
-                        cbor_encode_byte_string(&mapEncoder,
-                                                encryptedRequestSpan.data(),
-                                                encryptedRequestSpan.size()));
-  CHECK_CBOR_RETURN_OPT(
-      "Failed to close map",
-      cbor_encoder_close_container(&requestEncoder, &mapEncoder));
+  CHECK_CBOR_RETURN("Failed to add data",
+                    cbor_encode_byte_string(&mapEncoder,
+                                            encryptedRequestSpan.data(),
+                                            encryptedRequestSpan.size()));
+  CHECK_CBOR_RETURN("Failed to close map",
+                    cbor_encoder_close_container(&requestEncoder, &mapEncoder));
   std::span<const uint8_t> requestSpan(
       fullRequestBuf,
       cbor_encoder_get_buffer_size(&requestEncoder, fullRequestBuf + 1) + 1);
@@ -904,8 +896,6 @@ std::optional<std::span<const uint8_t>> performHandoff() {
     ESP_LOGE(TAG, "Tried to start advertising, but advertising is not "
                   "initialized");
   }
-
-  return std::nullopt;
 }
 
 void setupBLEServer() {

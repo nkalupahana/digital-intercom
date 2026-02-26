@@ -1,12 +1,7 @@
 #pragma once
 
-#include "Slice.h"
-#include <optional>
-#include <tlv.h>
-
 namespace DigitalID {
-void setupBLEServer();
-
+bool setupBLEServer();
 bool checkIfValid();
-std::optional<ReadSlice> performHandoff();
+void performHandoff();
 } // namespace DigitalID
