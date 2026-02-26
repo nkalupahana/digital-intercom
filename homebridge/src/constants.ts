@@ -1,3 +1,5 @@
+import type { PlatformConfig } from "homebridge";
+
 // These should be kept in sync with the C++ code
 export enum Command {
   OPEN_DOOR = "D",
@@ -14,3 +16,10 @@ export enum IntercomEventType {
 
 export const CREDIT_CARD_DATA_LEN = 34;
 export const HEARTBEAT_INTERVAL = 1000;
+
+export interface DigitalIntercomPlatformConfig extends PlatformConfig {
+  allowedCards: {
+    hash: string;
+    description: string;
+  }[];
+}

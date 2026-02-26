@@ -17,7 +17,7 @@ import {
   type StreamingRequest,
   type StreamRequestCallback,
 } from "homebridge";
-import { DigitalIntercomPlatformAccessory } from "./platformAccessory.js";
+import { IntercomPlatformAccessory } from "./platformAccesories/intercom.js";
 import getPort from "get-port";
 import { ChildProcess, spawn } from "node:child_process";
 import {
@@ -30,6 +30,7 @@ import { Command } from "./constants.js";
 import sharp from "sharp";
 import pathToFfmpeg from "ffmpeg-for-homebridge";
 import path from "node:path";
+import { DigitalIntercomPlatform } from "./platform.js";
 
 const videomtu = 188 * 5;
 const audiomtu = 188 * 1;
@@ -72,7 +73,8 @@ interface ActiveSession {
 }
 
 export class IntercomStreamingDelegate implements CameraStreamingDelegate {
-  private accessory: DigitalIntercomPlatformAccessory;
+  private accessory: IntercomPlatformAccessory;
+  private platform: DigitalIntercomPlatform;
   private hap: HAP;
   private pendingSessions: Record<string, SessionInfo> = {};
   private activeSession: ActiveSession | null = null;
@@ -86,9 +88,13 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
   });
   controller: CameraController;
 
-  constructor(paccessory: DigitalIntercomPlatformAccessory) {
+  constructor(
+    paccessory: IntercomPlatformAccessory,
+    platform: DigitalIntercomPlatform,
+  ) {
     this.accessory = paccessory;
     this.hap = paccessory.hap;
+    this.platform = platform;
 
     const options: CameraControllerOptions = {
       cameraStreamCount: 2, // HomeKit requires at least 2 streams, and HomeKit Secure Video requires 1.
@@ -152,9 +158,9 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
       console.log("Microphone muted", this.activeSession?.microphoneMuted);
       if (this.activeSession?.microphoneMuted) {
-        this.accessory.sendCommand(Command.LISTEN_ON);
+        this.platform.server.sendCommand(Command.LISTEN_ON);
       } else {
-        this.accessory.sendCommand(Command.TALK_ON);
+        this.platform.server.sendCommand(Command.TALK_ON);
       }
 
       this.controller.setMicrophoneMuted(true);
@@ -344,7 +350,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     }
 
     console.log("Starting stream", request);
-    this.accessory.sendCommand(Command.LISTEN_ON);
+    this.platform.server.sendCommand(Command.LISTEN_ON);
     // 1. INPUT GENERATORS
     // const videoInput = `-f lavfi -i color=c=red:s=${request.video.width}x${request.video.height}:r=${request.video.fps}`;
     const videoInput = `-f lavfi -i "movie=${snapPath}:loop=0,setpts=N/(${request.video.fps}*TB)"`;
@@ -429,7 +435,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
       "1", //this.protectCamera.ufp.talkbackSettings.channels.toString(),
       "-f",
       "s16le",
-      `udp://${this.accessory.getSocketAddress()}:9997?pkt_size=1024`,
+      `udp://${this.platform.server.getSocketAddress()}:9997?pkt_size=1024`,
     ];
 
     // TODO: handle no socket address
@@ -455,7 +461,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
     callback: StreamRequestCallback,
   ): void {
     console.log("Stopping stream", request);
-    this.accessory.sendCommand(Command.LISTEN_STOP);
+    this.platform.server.sendCommand(Command.LISTEN_STOP);
     if (this.activeSession === null) {
       console.error("No session currently active");
       callback();

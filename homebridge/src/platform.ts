@@ -4,19 +4,20 @@ import type {
   DynamicPlatformPlugin,
   Logging,
   PlatformAccessory,
-  PlatformConfig,
   Service,
 } from "homebridge";
 
-import { DigitalIntercomPlatformAccessory } from "./platformAccessory.js";
+import {
+  IntercomPlatformAccessory,
+  INTERCOM_ACCESSORY_NAME,
+} from "./platformAccesories/intercom.js";
+import {
+  DOOR_LOCK_ACCESSORY_NAME,
+  DoorLockPlatformAccessory,
+} from "./platformAccesories/doorLock.js";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
-
-interface DigitalIntercomPlatformConfig extends PlatformConfig {
-  allowedCards: {
-    hash: string;
-    description: string;
-  }[];
-}
+import { Server } from "./server.js";
+import { DigitalIntercomPlatformConfig } from "./constants.js";
 
 export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -32,6 +33,8 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly CustomCharacteristics: any;
   public readonly config: DigitalIntercomPlatformConfig;
+  public readonly server: Server;
+  private intercomPlatformAccessory: IntercomPlatformAccessory | null = null;
 
   constructor(
     public readonly log: Logging,
@@ -51,6 +54,8 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
       // run the method to discover / register your devices as accessories
       this.discoverDevices();
     });
+
+    this.server = new Server(this);
   }
 
   /**
@@ -64,31 +69,64 @@ export class DigitalIntercomPlatform implements DynamicPlatformPlugin {
     this.accessories.set(accessory.UUID, accessory);
   }
 
-  /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
-   */
   discoverDevices() {
-    const accessoryName = "Intercom";
-    const uuid = this.api.hap.uuid.generate(accessoryName);
-    const existingAccessory = this.accessories.get(uuid);
-    if (existingAccessory) {
-      this.log.info(
-        "Restoring existing accessory from cache:",
-        existingAccessory.displayName,
+    const intercomUuid = this.api.hap.uuid.generate(INTERCOM_ACCESSORY_NAME);
+    let intercomAccesory = this.accessories.get(intercomUuid);
+    const accesoriesToCreate = [];
+    let intercomPlatformAccessory: IntercomPlatformAccessory;
+    if (intercomAccesory) {
+      this.log.info("Restoring intercom accessory from cache");
+      intercomPlatformAccessory = new IntercomPlatformAccessory(
+        this,
+        intercomAccesory,
       );
-      new DigitalIntercomPlatformAccessory(this, existingAccessory);
     } else {
-      // the accessory does not yet exist, so we need to create it
-      this.log.info("Adding new accessory:", accessoryName);
-
-      // create a new accessory
-      const accessory = new this.api.platformAccessory(accessoryName, uuid);
-      new DigitalIntercomPlatformAccessory(this, accessory);
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
-        accessory,
-      ]);
+      this.log.info("Adding new intercom accessory");
+      intercomAccesory = new this.api.platformAccessory(
+        INTERCOM_ACCESSORY_NAME,
+        intercomUuid,
+      );
+      intercomPlatformAccessory = new IntercomPlatformAccessory(
+        this,
+        intercomAccesory,
+      );
+      accesoriesToCreate.push(intercomAccesory);
     }
+
+    const doorLockUuid = this.api.hap.uuid.generate(DOOR_LOCK_ACCESSORY_NAME);
+    const existingDoorLock = this.accessories.get(doorLockUuid);
+    if (existingDoorLock) {
+      this.log.info("Restoring door lock accessory from cache");
+      new DoorLockPlatformAccessory(this, existingDoorLock);
+    } else {
+      this.log.info("Adding new door lock accessory");
+      const doorLockAccessory = new this.api.platformAccessory(
+        DOOR_LOCK_ACCESSORY_NAME,
+        doorLockUuid,
+      );
+      new DoorLockPlatformAccessory(this, doorLockAccessory);
+      accesoriesToCreate.push(doorLockAccessory);
+    }
+
+    if (accesoriesToCreate.length > 0) {
+      this.api.registerPlatformAccessories(
+        PLUGIN_NAME,
+        PLATFORM_NAME,
+        accesoriesToCreate,
+      );
+    }
+
+    this.intercomPlatformAccessory = intercomPlatformAccessory;
+  }
+
+  public triggerDoorbell() {
+    if (!this.intercomPlatformAccessory) {
+      this.log.error(
+        "Cannot trigger doorbell because intercom accessory not set up",
+      );
+      return;
+    }
+
+    this.intercomPlatformAccessory.triggerDoorbell();
   }
 }
