@@ -124,6 +124,7 @@ encryptRequest(std::span<const uint8_t> deviceXY,
   printHex("Device Key: ", {deviceKey, sizeof(deviceKey)});
 
   static uint8_t iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+  mbedtls_gcm_init(&gcmCtx);
   CHECK_CRYPTO_RETURN_OPT(
       "Failed to set key",
       mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, readerKey, 256));
@@ -157,6 +158,7 @@ decryptResponse(std::span<const uint8_t> encrypted, WriteSlice &outputSlice) {
   size_t encryptedLen = dataLen - TAG_SIZE;
   uint8_t *outputPtr = outputSlice.deferAppend(encryptedLen);
 
+  mbedtls_gcm_init(&gcmCtx);
   CHECK_CRYPTO_RETURN_OPT(
       "Failed to set key",
       mbedtls_gcm_setkey(&gcmCtx, MBEDTLS_CIPHER_ID_AES, deviceKey, 256));

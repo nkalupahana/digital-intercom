@@ -152,13 +152,10 @@ class ClientToServerCharacteristicCallbacks
         CHECK_CBOR_RETURN("Failed to get data string chunk",
                           cbor_value_get_byte_string_chunk(
                               &value, &encrypted, &encryptedLen, &value));
-        const uint8_t *next;
-        size_t nextLen;
-        CborError err =
-            cbor_value_get_byte_string_chunk(&value, &next, &nextLen, &value);
-        if (err != CborErrorNoMoreStringChunks) {
-          ESP_LOGE(TAG, "Unable to handle more than one string chunk");
-        }
+        CHECK_PRINT_RETURN("Not at end of string iteration",
+                           cbor_value_string_iteration_at_end(&value));
+        CHECK_CBOR_RETURN("Failed to finish string iteration",
+                          cbor_value_finish_string_iteration(&value));
         break;
       }
 
@@ -194,11 +191,101 @@ class ClientToServerCharacteristicCallbacks
                        writeSlice.data() + 8 <= encrypted);
     std::optional<std::span<const uint8_t>> unencryptedSpanOpt =
         Crypto::decryptResponse(encryptedSpan, writeSlice);
-    if (!unencryptedSpanOpt) {
-      ESP_LOGI(TAG, "Didn't decrypt entire response");
-    } else {
-      printHex("Unencrypted client to server characteristic: ",
-               *unencryptedSpanOpt);
+    CHECK_PRINT_RETURN("Failed to decrypt response",
+                       unencryptedSpanOpt.has_value());
+    printHex("Unencrypted client to server characteristic: ",
+             *unencryptedSpanOpt);
+
+    CborParser decryptParser;
+    CborValue decryptValue;
+    CHECK_CBOR_RETURN("CBOR parser fialed to initialize",
+                      cbor_parser_init(unencryptedSpanOpt->data(),
+                                       unencryptedSpanOpt->size(), 0,
+                                       &decryptParser, &decryptValue));
+    CHECK_PRINT_RETURN("CBOR value is not map",
+                       cbor_value_is_map(&decryptValue));
+    CHECK_CBOR_RETURN(
+        "Failed to find documents key",
+        cbor_value_map_find_value(&decryptValue, "documents", &decryptValue));
+    CHECK_PRINT_RETURN("documents is not an array",
+                       cbor_value_is_array(&decryptValue));
+    CHECK_CBOR_RETURN("Failed to enter array",
+                      cbor_value_enter_container(&decryptValue, &decryptValue));
+    CHECK_PRINT_RETURN("first document is not a map",
+                       cbor_value_is_map(&decryptValue));
+    CHECK_CBOR_RETURN("Failed to find issuerSigned key",
+                      cbor_value_map_find_value(&decryptValue, "issuerSigned",
+                                                &decryptValue));
+    CHECK_PRINT_RETURN("issuerSigned is not a map",
+                       cbor_value_is_map(&decryptValue));
+    CHECK_CBOR_RETURN(
+        "Failed to find nameSpaces key",
+        cbor_value_map_find_value(&decryptValue, "nameSpaces", &decryptValue));
+    CHECK_PRINT_RETURN("nameSpaces is not a map",
+                       cbor_value_is_map(&decryptValue));
+    CHECK_CBOR_RETURN("Failed to enter nameSpaces",
+                      cbor_value_enter_container(&decryptValue, &decryptValue));
+    // check if key exists and is string
+    CHECK_PRINT_RETURN("map key is not a string",
+                       cbor_value_is_text_string(&decryptValue));
+    // advance
+    CHECK_CBOR_RETURN("Failed to advance to value",
+                      cbor_value_advance(&decryptValue));
+    // check if value is array
+    CHECK_PRINT_RETURN("value is not an array",
+                       cbor_value_is_array(&decryptValue));
+    // get array size
+    size_t arraySize;
+    CHECK_CBOR_RETURN("Failed to get array size",
+                      cbor_value_get_array_length(&decryptValue, &arraySize));
+    Serial.printf("Array size: %d\n", arraySize);
+    CHECK_CBOR_RETURN("Failed to enter array",
+                      cbor_value_enter_container(&decryptValue, &decryptValue));
+
+    for (size_t i = 0; i < arraySize; ++i) {
+      CHECK_PRINT_RETURN("value is not tagged",
+                         cbor_value_is_tag(&decryptValue));
+      CHECK_CBOR_RETURN("Failed to skip tag",
+                        cbor_value_skip_tag(&decryptValue));
+      // check if value is byte string
+      CHECK_PRINT_RETURN("value is not a byte string",
+                         cbor_value_is_byte_string(&decryptValue));
+      CHECK_CBOR_RETURN("Failed to begin string iteration",
+                        cbor_value_begin_string_iteration(&decryptValue));
+      const uint8_t *chunk;
+      size_t chunkLen;
+      CHECK_CBOR_RETURN("Failed to get data string chunk",
+                        cbor_value_get_byte_string_chunk(
+                            &decryptValue, &chunk, &chunkLen, &decryptValue));
+      printHex("Chunk: ", {chunk, chunkLen});
+      // Assuming only one chunk, so should be at end
+      CHECK_PRINT_RETURN("Not at end of string iteration",
+                         cbor_value_string_iteration_at_end(&decryptValue));
+      CHECK_CBOR_RETURN("Failed to finish string iteration",
+                        cbor_value_finish_string_iteration(&decryptValue));
+
+      CborParser chunkParser;
+      CborValue chunkValue;
+      CHECK_CBOR_RETURN(
+          "CBOR parser failed to initialize",
+          cbor_parser_init(chunk, chunkLen, 0, &chunkParser, &chunkValue));
+      CHECK_PRINT_RETURN("CBOR value is not map",
+                         cbor_value_is_map(&chunkValue));
+      // get key elementIdentifier
+      CHECK_CBOR_RETURN("Failed to get key elementIdentifier",
+                        cbor_value_map_find_value(
+                            &chunkValue, "elementIdentifier", &chunkValue));
+      CHECK_PRINT_RETURN("elementIdentifier is not a string",
+                         cbor_value_is_text_string(&chunkValue));
+      size_t elementIdentifierLen = 50;
+      char elementIdentifier[elementIdentifierLen];
+      CHECK_CBOR_RETURN(
+          "Failed to get elementIdentifier",
+          cbor_value_copy_text_string(&chunkValue, elementIdentifier,
+                                      &elementIdentifierLen, &chunkValue));
+      std::string_view elementIdentifierView(elementIdentifier,
+                                             elementIdentifierLen);
+      Serial.printf("Element identifier: %s\n", elementIdentifierView.data());
     }
   };
 } clientToServerCharacteristicCallbacks;
