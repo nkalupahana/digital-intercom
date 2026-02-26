@@ -434,7 +434,7 @@ export class IntercomStreamingDelegate implements CameraStreamingDelegate {
 
     // TODO: handle no socket address
 
-    const returnFfmpegProcess = spawn(`${pathToFfmpeg}}`, ffmpegReturnAudioCmd);
+    const returnFfmpegProcess = spawn(`${pathToFfmpeg}`, ffmpegReturnAudioCmd);
     returnFfmpegProcess.stdin?.end(sdpReturnAudio + "\n");
 
     this.activeSession = {
