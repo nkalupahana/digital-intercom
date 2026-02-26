@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "Crypto.h"
 #include "NFC.h"
+#include "Radio.h"
 #include "Slice.h"
 #include "errors.h"
 #include "utils.h"
@@ -13,8 +14,11 @@
 #include <NimBLEServer.h>
 #include <cbor.h>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
+#include <ranges>
 #include <span>
+#include <sys/_intsup.h>
 #include <tlv.h>
 
 namespace DigitalID {
@@ -333,6 +337,31 @@ class ClientToServerCharacteristicCallbacks
     ESP_LOGI(TAG, "Given name: %s", givenName);
     ESP_LOGI(TAG, "Family name: %s", familyName);
     ESP_LOGI(TAG, "Birth date: %s", birthDate);
+
+    uint8_t radioMessage[150];
+    WriteSlice radioMessageSlice(radioMessage, sizeof(radioMessage));
+    CHECK_PRINT_RETURN(
+        "Failed to append digital id message type",
+        radioMessageSlice.append(std::initializer_list{
+            static_cast<uint8_t>(Radio::MessageType::DIGITAL_ID)}));
+    const std::initializer_list<const char *> messageData = {
+        givenName, familyName, birthDate};
+    for (const auto &[i, str] : std::views::enumerate(messageData)) {
+      if (i != 0) {
+        CHECK_PRINT_RETURN("Failed to append delimeter",
+                           radioMessageSlice.append({{';'}}));
+      }
+      CHECK_PRINT_RETURN(
+          "Failed to append data",
+          radioMessageSlice.append(
+              {reinterpret_cast<const uint8_t *>(str), strlen(str)}));
+    }
+
+    const std::span<uint8_t> radioMessageSpan =
+        radioMessageSlice.nonConstSpan();
+    printHex("Sending radio message: ", radioMessageSpan);
+    // CHECK_PRINT_RETURN("Failed to send radio message",
+    //                    Radio::send(radioMessageSpan.subspan(0, 5)));
   };
 } clientToServerCharacteristicCallbacks;
 

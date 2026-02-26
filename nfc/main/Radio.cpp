@@ -1,5 +1,6 @@
 #include "Radio.h"
 #include "../../../constants.h"
+#include "errors.h"
 #include "utils.h"
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
@@ -28,11 +29,8 @@ bool setup() {
 
   driver.setTxPower(RADIO_POWER, true);
   driver.setFrequency(RADIO_FREQUENCY);
-  bool success = driver.setModemConfig(RH_RF69::FSK_Rb2Fd5);
-  if (!success) {
-    ESP_LOGE(TAG, "Failed to set modem config");
-    return false;
-  }
+  CHECK_PRINT_RETURN_BOOL("Failed to set modem config",
+                          driver.setModemConfig(RH_RF69::FSK_Rb2Fd5));
 
   return true;
 }

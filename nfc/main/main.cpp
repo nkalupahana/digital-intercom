@@ -54,8 +54,8 @@ void loop() {
       // Hash
       const int hashBufferSize = 35; // 1 byte for message type, 32 bytes for
                                      // hash, 2 bytes for last 4 of track 2 data
-      unsigned char output[hashBufferSize];
-      output[0] = static_cast<char>(Radio::MessageType::HASHED_TRACK_2);
+      uint8_t output[hashBufferSize];
+      output[0] = static_cast<uint8_t>(Radio::MessageType::HASHED_TRACK_2);
       int ret =
           mbedtls_sha256(track2Data.data(), track2Data.size(), output + 1, 0);
       CHECK_PRINT_RETURN("Failed to hash data", ret == 0);
