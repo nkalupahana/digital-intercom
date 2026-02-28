@@ -358,8 +358,7 @@ class ClientToServerCharacteristicCallbacks
               {reinterpret_cast<const uint8_t *>(str), strlen(str)}));
     }
 
-    const std::span<uint8_t> radioMessageSpan =
-        radioMessageSlice.nonConstSpan();
+    auto radioMessageSpan = radioMessageSlice.span();
     printHex("Sending radio message: ", radioMessageSpan);
     auto task = [](void *pvParameters) {
       std::span<uint8_t> span =
@@ -372,10 +371,9 @@ class ClientToServerCharacteristicCallbacks
       }
       vTaskDelete(NULL);
     };
-    xTaskCreatePinnedToCore(
-        task, "Radio Task", 4096,
-        const_cast<void *>(reinterpret_cast<const void *>(&radioMessageSpan)),
-        1, nullptr, 1);
+    xTaskCreatePinnedToCore(task, "Radio Task", 4096,
+                            reinterpret_cast<void *>(&radioMessageSpan), 1,
+                            nullptr, 1);
   };
 } clientToServerCharacteristicCallbacks;
 
