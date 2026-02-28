@@ -361,16 +361,21 @@ class ClientToServerCharacteristicCallbacks
     const std::span<uint8_t> radioMessageSpan =
         radioMessageSlice.nonConstSpan();
     printHex("Sending radio message: ", radioMessageSpan);
-    // CHECK_PRINT_RETURN("Failed to send radio message",
-    //                    Radio::send(radioMessageSpan.subspan(0, 5)));
     auto task = [](void *pvParameters) {
-      uint8_t buf[] = {'t', 'e', 's', 't'};
-      Serial.println("Sending");
-      Radio::send(std::span<uint8_t>(buf));
-      Serial.println("Sent");
+      std::span<uint8_t> span =
+          *reinterpret_cast<std::span<uint8_t> *>(pvParameters);
+      bool success = Radio::send(span);
+      if (success) {
+        ESP_LOGI(TAG, "Radio message sent successfully");
+      } else {
+        ESP_LOGE(TAG, "Radio message send failed");
+      }
       vTaskDelete(NULL);
     };
-    xTaskCreatePinnedToCore(task, "Radio Task", 4096, nullptr, 1, nullptr, 1);
+    xTaskCreatePinnedToCore(
+        task, "Radio Task", 4096,
+        const_cast<void *>(reinterpret_cast<const void *>(&radioMessageSpan)),
+        1, nullptr, 1);
   };
 } clientToServerCharacteristicCallbacks;
 
