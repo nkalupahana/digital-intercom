@@ -4,6 +4,7 @@
 #include "Radio.h"
 #include "Slice.h"
 #include "errors.h"
+#include "freertos/idf_additions.h"
 #include "utils.h"
 #include <NdefMessage.h>
 #include <NdefRecord.h>
@@ -362,6 +363,14 @@ class ClientToServerCharacteristicCallbacks
     printHex("Sending radio message: ", radioMessageSpan);
     // CHECK_PRINT_RETURN("Failed to send radio message",
     //                    Radio::send(radioMessageSpan.subspan(0, 5)));
+    auto task = [](void *pvParameters) {
+      uint8_t buf[] = {'t', 'e', 's', 't'};
+      Serial.println("Sending");
+      Radio::send(std::span<uint8_t>(buf));
+      Serial.println("Sent");
+      vTaskDelete(NULL);
+    };
+    xTaskCreatePinnedToCore(task, "Radio Task", 4096, nullptr, 1, nullptr, 1);
   };
 } clientToServerCharacteristicCallbacks;
 
