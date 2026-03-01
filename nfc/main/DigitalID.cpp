@@ -61,7 +61,7 @@ private:
 
   void onSubscribe(NimBLECharacteristic *pCharacteristic,
                    NimBLEConnInfo &connInfo, uint16_t subValue) override {
-    ESP_LOGI(TAG, "Subscribed!");
+    ESP_LOGI(TAG, "Subscribed to state characteristic!");
     NimBLECharacteristicCallbacks::onSubscribe(pCharacteristic, connInfo,
                                                subValue);
   };
@@ -131,6 +131,12 @@ class ClientToServerCharacteristicCallbacks
       return;
     };
     printHex("Got complete message ", message);
+
+    bool success = pCharacteristic->getService()->getServer()->disconnect(
+        connInfo.getConnHandle());
+    if (!success) {
+      ESP_LOGE(TAG, "Failed to disconnect");
+    }
 
     const uint8_t *encrypted = nullptr;
     size_t encryptedLen;
