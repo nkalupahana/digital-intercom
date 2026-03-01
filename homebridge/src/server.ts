@@ -106,6 +106,30 @@ export class Server {
         this.socket?.write(Command.OPEN_DOOR);
       }
       return;
+    } else if (eventType === IntercomEventType.DIGITAL_ID) {
+      console.log("Got digital ID event", data);
+      const digitalIdData = data.subarray(1, data.length).toString("utf8");
+      console.log("Got digital ID data", digitalIdData);
+      const splitData = digitalIdData.split(";");
+      if (splitData.length !== 3) {
+        console.log("Invalid digital ID data length", splitData.length);
+        return;
+      }
+      const [familyName, givenName, birthDate] = splitData;
+      const allowedDigitalId = this.config.allowedDigitalIds.find(
+        (id) =>
+          id.familyName.toUpperCase() === familyName.toUpperCase() &&
+          id.givenName.toUpperCase() === givenName.toUpperCase() &&
+          id.birthDate.toUpperCase() === birthDate.toUpperCase(),
+      );
+
+      if (!allowedDigitalId) {
+        console.log("Digital ID not allowed", familyName, givenName, birthDate);
+      } else {
+        console.log("Digital ID allowed", familyName, givenName, birthDate);
+        this.socket?.write(Command.OPEN_DOOR);
+      }
+      return;
     } else {
       console.log("Invalid eventType", eventType, data);
       return;

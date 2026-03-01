@@ -12,6 +12,7 @@ export enum Command {
 export enum IntercomEventType {
   BUZZER = "B",
   CREDIT_CARD = "C",
+  DIGITAL_ID = "D",
 }
 
 export const CREDIT_CARD_DATA_LEN = 34;
@@ -21,5 +22,10 @@ export interface DigitalIntercomPlatformConfig extends PlatformConfig {
   allowedCards: {
     hash: string;
     description: string;
+  }[];
+  allowedDigitalIds: {
+    familyName: string;
+    givenName: string;
+    birthDate: string;
   }[];
 }
