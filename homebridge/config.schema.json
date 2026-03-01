@@ -31,12 +31,12 @@
         "items": {
           "type": "object",
           "properties": {
-            "familyName": {
-              "title": "Family Name",
-              "type": "string"
-            },
             "givenName": {
               "title": "Given Name",
+              "type": "string"
+            },
+            "familyName": {
+              "title": "Family Name",
               "type": "string"
             },
             "birthDate": {

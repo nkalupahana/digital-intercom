@@ -115,18 +115,18 @@ export class Server {
         console.log("Invalid digital ID data length", splitData.length);
         return;
       }
-      const [familyName, givenName, birthDate] = splitData;
+      const [givenName, familyName, birthDate] = splitData;
       const allowedDigitalId = this.config.allowedDigitalIds.find(
         (id) =>
-          id.familyName.toUpperCase() === familyName.toUpperCase() &&
           id.givenName.toUpperCase() === givenName.toUpperCase() &&
+          id.familyName.toUpperCase() === familyName.toUpperCase() &&
           id.birthDate.toUpperCase() === birthDate.toUpperCase(),
       );
 
       if (!allowedDigitalId) {
-        console.log("Digital ID not allowed", familyName, givenName, birthDate);
+        console.log("Digital ID not allowed", givenName, familyName, birthDate);
       } else {
-        console.log("Digital ID allowed", familyName, givenName, birthDate);
+        console.log("Digital ID allowed", givenName, familyName, birthDate);
         this.socket?.write(Command.OPEN_DOOR);
       }
       return;
