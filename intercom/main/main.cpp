@@ -181,11 +181,13 @@ void loop() {
         }
         Serial.println();
 
-        if (len != CREDIT_CARD_DATA_LEN) {
-          ESP_LOGE(TAG, "Received invalid credit card data (actual length: %d). Not sending", len);
+        auto data = std::span<uint8_t>{msgBuf, len};
+        if (data[0] == (char)OutputEvent::CREDIT_CARD) {
+          sendData(data);
+        } else if (data[0] == (char)OutputEvent::DIGITAL_ID) {
+          sendData(data);
         } else {
-          sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN>{
-              msgBuf, CREDIT_CARD_DATA_LEN});
+          ESP_LOGE(TAG, "Received invalid data type: %c", data[0]);
         }
       }
     }

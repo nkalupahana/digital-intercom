@@ -1,7 +1,5 @@
 #pragma once
 
-#include "../../constants.h"
-
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -18,9 +16,10 @@ enum class Command {
 enum class OutputEvent {
   BUZZER = 'B',
   CREDIT_CARD = 'C',
+  DIGITAL_ID = 'D',
 };
 
 void connectToTCPServer();
 std::optional<Command> getCommand();
 void sendBuzzerEvent();
-void sendCreditCardEvent(std::span<uint8_t, CREDIT_CARD_DATA_LEN> data);
+void sendData(std::span<uint8_t> buffer);

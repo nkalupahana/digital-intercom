@@ -5,7 +5,7 @@
 
 namespace Radio {
 enum class MessageType {
-  HASHED_TRACK_2 = 'H',
+  CREDIT_CARD = 'C',
   DIGITAL_ID = 'D',
 };
 

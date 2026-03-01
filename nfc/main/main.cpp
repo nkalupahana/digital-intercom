@@ -55,15 +55,16 @@ void loop() {
       const int hashBufferSize = 35; // 1 byte for message type, 32 bytes for
                                      // hash, 2 bytes for last 4 of track 2 data
       uint8_t output[hashBufferSize];
-      output[0] = static_cast<uint8_t>(Radio::MessageType::HASHED_TRACK_2);
+      output[0] = static_cast<uint8_t>(Radio::MessageType::CREDIT_CARD);
       int ret =
           mbedtls_sha256(track2Data.data(), track2Data.size(), output + 1, 0);
       CHECK_PRINT_RETURN("Failed to hash data", ret == 0);
 
       // Add last 4 to the end
-      output[hashBufferSize - 2] = track2Data[7];
-      output[hashBufferSize - 1] = track2Data[8];
+      output[hashBufferSize - 2] = track2Data[6];
+      output[hashBufferSize - 1] = track2Data[7];
 
+      printHex("Hashed data: ", {output, hashBufferSize});
       // Send
       bool success = Radio::send({output, hashBufferSize});
       if (success) {
