@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 async-trait = "0.1.92"
+axum = "0.8"
 bytes = "1"
+dotenvy = "0.15"
 futures-util = { version = "0.3", features = ["sink"] }
 opus = "0.3"
 # `dynamic` is required on macOS: the crate otherwise requests a static

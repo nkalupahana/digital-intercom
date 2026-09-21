@@ -7,6 +7,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::{mpsc, watch};
 
+use crate::home_assistant::HomeAssistant;
+
 pub const TCP_PORT: u16 = 9998;
 pub const LISTEN_UDP_PORT: u16 = 9999;
 pub const TALK_UDP_PORT: u16 = 9997;
@@ -43,6 +45,7 @@ pub struct IntercomControl {
     desired_mode: watch::Sender<Mode>,
     mode: watch::Receiver<Mode>,
     peer_ip: watch::Receiver<Option<IpAddr>>,
+    unlock: mpsc::Sender<()>,
     talk: Arc<UdpSocket>,
     talk_errors: Arc<AtomicU32>,
 }
@@ -67,6 +70,14 @@ impl IntercomControl {
 
     pub fn mode(&self) -> Mode {
         *self.mode.borrow()
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.peer_ip.borrow().is_some()
+    }
+
+    pub async fn unlock(&self) -> Result<()> {
+        self.unlock.send(()).await.context("unlock channel closed")
     }
 
     pub async fn send_talk(&self, data: &[u8]) -> Result<()> {
@@ -94,7 +105,7 @@ impl IntercomControl {
 }
 
 impl Intercom {
-    pub async fn start() -> Result<Self> {
+    pub async fn start(ha: HomeAssistant) -> Result<Self> {
         let tcp = TcpListener::bind(("0.0.0.0", TCP_PORT))
             .await
             .with_context(|| format!("bind TCP {TCP_PORT}"))?;
@@ -110,11 +121,12 @@ impl Intercom {
         let (desired_tx, desired_rx) = watch::channel(Mode::Idle);
         let (peer_ip_tx, peer_ip_rx) = watch::channel(None);
         let (listen_tx, listen_rx) = mpsc::channel::<Vec<u8>>(32);
+        let (unlock_tx, unlock_rx) = mpsc::channel(8);
 
         println!("TCP control listening on 0.0.0.0:{TCP_PORT}");
         println!("UDP listen on 0.0.0.0:{LISTEN_UDP_PORT}");
 
-        tokio::spawn(tcp_loop(tcp, desired_rx, peer_ip_tx));
+        tokio::spawn(tcp_loop(tcp, desired_rx, peer_ip_tx, ha, unlock_rx));
         tokio::spawn(udp_listen_loop(listen, listen_tx));
 
         Ok(Self {
@@ -122,6 +134,7 @@ impl Intercom {
                 desired_mode: desired_tx.clone(),
                 mode: desired_tx.subscribe(),
                 peer_ip: peer_ip_rx,
+                unlock: unlock_tx,
                 talk,
                 talk_errors: Arc::new(AtomicU32::new(0)),
             },
@@ -134,6 +147,8 @@ async fn tcp_loop(
     listener: TcpListener,
     mut desired: watch::Receiver<Mode>,
     peer_ip: watch::Sender<Option<IpAddr>>,
+    ha: HomeAssistant,
+    mut unlock: mpsc::Receiver<()>,
 ) {
     let mut writer: Option<tokio::net::tcp::OwnedWriteHalf> = None;
     let mut reader: Option<tokio::net::tcp::OwnedReadHalf> = None;
@@ -182,13 +197,27 @@ async fn tcp_loop(
                     eprintln!("cannot send {} — no intercom TCP client", mode.name());
                 }
             }
+            msg = unlock.recv() => {
+                if msg.is_none() {
+                    break;
+                }
+                if let Some(w) = writer.as_mut() {
+                    if w.write_all(b"D").await.is_err() {
+                        drop_client(&mut writer, &mut reader, &peer_ip);
+                    } else {
+                        println!("sent command D (unlock)");
+                    }
+                } else {
+                    eprintln!("cannot send unlock — no intercom TCP client");
+                }
+            }
             n = read_client(&mut reader, &mut buf), if reader.is_some() => {
                 match n {
                     Ok(0) => {
                         println!("intercom TCP disconnected");
                         drop_client(&mut writer, &mut reader, &peer_ip);
                     }
-                    Ok(n) => log_intercom_bytes(&buf[..n]),
+                    Ok(n) => handle_intercom_bytes(&buf[..n], &ha),
                     Err(err) => {
                         eprintln!("intercom TCP read error: {err}");
                         drop_client(&mut writer, &mut reader, &peer_ip);
@@ -257,13 +286,19 @@ async fn read_client(
     }
 }
 
-fn log_intercom_bytes(data: &[u8]) {
+fn handle_intercom_bytes(data: &[u8], ha: &HomeAssistant) {
     if data.is_empty() {
         return;
     }
     let kind = data[0] as char;
     match kind {
-        'B' => println!("intercom event: buzzer"),
+        'B' => {
+            println!("intercom event: buzzer");
+            let ha = ha.clone();
+            tokio::spawn(async move {
+                ha.pulse_doorbell().await;
+            });
+        }
         'C' => println!("intercom event: credit card ({} bytes)", data.len()),
         'D' => println!("intercom event: digital id"),
         other => println!("intercom event: {other:?} ({} bytes)", data.len()),
