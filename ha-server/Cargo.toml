@@ -1,0 +1,23 @@
+[package]
+name = "ha-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1.92"
+bytes = "1"
+futures-util = { version = "0.3", features = ["sink"] }
+opus = "0.3"
+# `dynamic` is required on macOS: the crate otherwise requests a static
+# libopus.a that Nix does not ship. Linking still needs pkg-config or
+# LIBOPUS_LIB_DIR from `nix develop` (see flake.nix), or it uses CMake.
+audiopus_sys = { version = "0.2.2", features = ["dynamic"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+rtc = "0.20.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "io-util"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+uuid = { version = "1", features = ["v4"] }
+webrtc = "0.20.3"

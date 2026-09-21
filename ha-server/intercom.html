@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Digital Intercom</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121418;
+        --card: #1c1f26;
+        --text: #f2f4f8;
+        --muted: #9aa3b2;
+        --listen: #3d8bfd;
+        --talk: #e35d5d;
+        --ok: #3ecf8e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+      }
+      main {
+        width: min(28rem, calc(100vw - 2rem));
+        background: var(--card);
+        border-radius: 1.25rem;
+        padding: 1.75rem;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+      h1 { margin: 0 0 0.35rem; font-size: 1.4rem; }
+      p { margin: 0; color: var(--muted); line-height: 1.45; }
+      #status {
+        margin: 1.25rem 0 1.5rem;
+        font-weight: 600;
+        color: var(--listen);
+      }
+      #status.error { color: var(--talk); }
+      #status.talk { color: var(--talk); }
+      #status.ok { color: var(--ok); }
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 999px;
+        padding: 1.15rem 1rem;
+        font: inherit;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: white;
+        background: var(--listen);
+        cursor: pointer;
+        user-select: none;
+        touch-action: none;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      button.talking { background: var(--talk); }
+      #audios { display: none; }
+      .hint { margin-top: 1rem; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Digital Intercom</h1>
+      <p>Hold the button or spacebar to talk. Release to listen.</p>
+      <div id="status">Connecting…</div>
+      <button id="ptt" type="button" disabled>Push to talk</button>
+      <p class="hint">This page joins Prox at <code>/intercom/listen</code> and <code>/intercom/talk</code>.</p>
+      <div id="audios"></div>
+    </main>
+    <script type="module">
+      const BASE_URL = "https://prox.nisa.la";
+      const REMOTE = "github.com/nkalupahana/digital-intercom.git";
+      const LISTEN_PATH = "/intercom/listen";
+      const TALK_PATH = "/intercom/talk";
+
+      const statusEl = document.getElementById("status");
+      const ptt = document.getElementById("ptt");
+      const audios = document.getElementById("audios");
+
+      let talking = false;
+      let ready = false;
+      let ws = null;
+      let micTrack = null;
+      let sessionId = null;
+      let path = LISTEN_PATH;
+      const pendingStreamIdToTrackId = {};
+      const activeTracks = {};
+
+      function setStatus(text, kind = "") {
+        statusEl.textContent = text;
+        statusEl.className = kind;
+      }
+
+      function getPathDistance(path1, path2) {
+        const segments1 = path1.split("/").filter(Boolean);
+        const segments2 = path2.split("/").filter(Boolean);
+        let commonDepth = 0;
+        while (
+          commonDepth < segments1.length &&
+          commonDepth < segments2.length &&
+          segments1[commonDepth] === segments2[commonDepth]
+        ) {
+          commonDepth++;
+        }
+        const stepsUp = segments1.length - commonDepth;
+        const stepsDown = segments2.length - commonDepth;
+        return Math.max(stepsUp + stepsDown - 1, 0);
+      }
+
+      function getVolume(path1, path2) {
+        const distance = getPathDistance(path1, path2);
+        return { 0: 1, 1: 0.5, 2: 0.1 }[distance] ?? 0;
+      }
+
+      function setPath(nextPath) {
+        path = nextPath;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({
+          command: "set_path",
+          path: nextPath,
+          prettyPath: nextPath,
+        }));
+      }
+
+      function setTalking(next) {
+        if (!ready || talking === next) return;
+        talking = next;
+        micTrack.enabled = next;
+        setPath(next ? TALK_PATH : LISTEN_PATH);
+        ptt.classList.toggle("talking", next);
+        ptt.textContent = next ? "Talking…" : "Push to talk";
+        setStatus(next ? "Talking" : "Listening", next ? "talk" : "ok");
+        for (const audio of Object.values(activeTracks)) {
+          audio.muted = next;
+        }
+      }
+
+      function waitIceConnected(pc) {
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("ICE connect timeout")), 5000);
+          const onChange = () => {
+            if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+              clearTimeout(timeout);
+              pc.removeEventListener("iceconnectionstatechange", onChange);
+              resolve();
+            } else if (pc.iceConnectionState === "failed") {
+              clearTimeout(timeout);
+              pc.removeEventListener("iceconnectionstatechange", onChange);
+              reject(new Error("ICE failed"));
+            }
+          };
+          pc.addEventListener("iceconnectionstatechange", onChange);
+        });
+      }
+
+      async function postJson(path, body) {
+        const response = await fetch(`${BASE_URL}${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`${path} failed (${response.status}): ${text}`);
+        }
+        return text ? JSON.parse(text) : {};
+      }
+
+      let receiveQueue = Promise.resolve();
+      function enqueueReceive(work) {
+        receiveQueue = receiveQueue.then(work).catch((err) => {
+          console.error(err);
+          setStatus(err.message, "error");
+        });
+        return receiveQueue;
+      }
+
+      async function connect() {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+          bundlePolicy: "max-bundle",
+        });
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micTrack = stream.getAudioTracks()[0];
+        micTrack.enabled = false;
+        const transceiver = pc.addTransceiver(micTrack, { direction: "sendonly" });
+
+        await pc.setLocalDescription(await pc.createOffer());
+        const session = await postJson("/session", { sdp: pc.localDescription.sdp });
+        sessionId = session.sessionId;
+        await pc.setRemoteDescription(session.sessionDescription);
+        await waitIceConnected(pc);
+
+        await pc.setLocalDescription(await pc.createOffer());
+        const trackName = micTrack.id;
+        const send = await postJson("/tracks/send", {
+          sessionId,
+          sdp: pc.localDescription.sdp,
+          track: {
+            location: "local",
+            mid: transceiver.mid,
+            trackName,
+          },
+        });
+        await pc.setRemoteDescription(send.sessionDescription);
+
+        pc.ontrack = (event) => {
+          const stream = event.streams[0];
+          const trackId = pendingStreamIdToTrackId[stream.id];
+          if (!trackId || activeTracks[trackId]) return;
+          const audio = new Audio();
+          audio.srcObject = stream;
+          audio.autoplay = true;
+          audio.muted = talking;
+          activeTracks[trackId] = audio;
+          audios.appendChild(audio);
+        };
+
+        const wsParams = new URLSearchParams({
+          sessionId,
+          trackId: trackName,
+          remote: REMOTE,
+        });
+        ws = new WebSocket(`${BASE_URL.replace("https", "wss")}/websocket?${wsParams}`);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ command: "set_path", path: LISTEN_PATH, prettyPath: LISTEN_PATH }));
+          ws.send(JSON.stringify({ command: "set_name", name: "intercom-web" }));
+          ready = true;
+          ptt.disabled = false;
+          setStatus("Listening", "ok");
+        };
+        ws.onerror = () => setStatus("Lost connection with Prox", "error");
+        ws.onclose = () => {
+          ready = false;
+          ptt.disabled = true;
+          setStatus("Disconnected", "error");
+        };
+        ws.onmessage = (ev) => {
+          let message;
+          try {
+            message = JSON.parse(ev.data);
+          } catch {
+            return;
+          }
+          if (message.command !== "active_sessions") return;
+          enqueueReceive(() => subscribeSessions(pc, message.sessions || []));
+        };
+      }
+
+      async function subscribeSessions(pc, sessions) {
+        const tracksToConnect = [];
+        for (const session of sessions) {
+          if (session.id === sessionId) continue;
+          if (session.trackId in activeTracks) continue;
+          if (getVolume(session.path, path) === 0) continue;
+          tracksToConnect.push({
+            location: "remote",
+            sessionId: session.id,
+            trackName: session.trackId,
+          });
+        }
+        if (!tracksToConnect.length) return;
+
+        const receive = await postJson("/tracks/receive", {
+          sessionId,
+          tracks: tracksToConnect,
+        });
+        Object.assign(pendingStreamIdToTrackId, receive.streamIdToTrackId || {});
+        await pc.setRemoteDescription(receive.sessionDescription);
+        await pc.setLocalDescription(await pc.createAnswer());
+        await postJson("/renegotiate", {
+          sessionId,
+          sdp: pc.localDescription.sdp,
+        });
+      }
+
+      ptt.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        ptt.setPointerCapture(event.pointerId);
+        setTalking(true);
+      });
+      ptt.addEventListener("pointerup", () => setTalking(false));
+      ptt.addEventListener("pointercancel", () => setTalking(false));
+      window.addEventListener("keydown", (event) => {
+        if (event.code === "Space" && !event.repeat) {
+          event.preventDefault();
+          setTalking(true);
+        }
+      });
+      window.addEventListener("keyup", (event) => {
+        if (event.code === "Space") {
+          event.preventDefault();
+          setTalking(false);
+        }
+      });
+      window.addEventListener("blur", () => setTalking(false));
+
+      try {
+        await connect();
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || String(err), "error");
+      }
+    </script>
+  </body>
+</html>
