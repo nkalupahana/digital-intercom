@@ -1,0 +1,9 @@
+panel_custom:
+  - name: digital-intercom-panel
+    sidebar_title: Intercom
+    sidebar_icon: mdi:intercom
+    url_path: intercom
+    module_url: /local/digital-intercom-panel.js
+    config:
+      base_url: https://prox.nisa.la
+      remote: github.com/nkalupahana/digital-intercom.git
