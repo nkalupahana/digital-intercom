@@ -48,4 +48,42 @@ jobs:
         working-directory: homebridge
       - run: npm run build
         working-directory: homebridge
-          
+  ha-server:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+      - name: Install musl and cmake
+        run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ha-server
+          shared-key: ha-server-aarch64-musl
+      - name: Build
+        working-directory: ha-server
+        env:
+          CC: musl-gcc
+          CXX: musl-g++
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          CXX_aarch64_unknown_linux_musl: musl-g++
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          LIBOPUS_STATIC: "1"
+          OPUS_STATIC: "1"
+          LIBOPUS_NO_PKG: "1"
+          OPUS_NO_PKG: "1"
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build --release --target aarch64-unknown-linux-musl
+      - name: Strip binary
+        run: strip ha-server/target/aarch64-unknown-linux-musl/release/ha-server
+      - name: Check binary
+        run: file ha-server/target/aarch64-unknown-linux-musl/release/ha-server
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha-server-aarch64-linux-musl
+          path: ha-server/target/aarch64-unknown-linux-musl/release/ha-server
+ 
