@@ -33,6 +33,7 @@ class DigitalIntercomPanel extends HTMLElement {
       this._setTalking(true);
     };
     this._onPointerUp = () => this._setTalking(false);
+    this._preventSelect = (event) => event.preventDefault();
     this._onKeyDown = (event) => {
       if (event.code === "Space" && !event.repeat) {
         event.preventDefault();
@@ -112,8 +113,6 @@ class DigitalIntercomPanel extends HTMLElement {
       <style>
         :host {
           color-scheme: dark;
-          --bg: #121418;
-          --card: #1c1f26;
           --text: #f2f4f8;
           --muted: #9aa3b2;
           --listen: #3d8bfd;
@@ -124,7 +123,7 @@ class DigitalIntercomPanel extends HTMLElement {
           height: 100%;
           min-height: 100%;
           font-family: ui-sans-serif, system-ui, sans-serif;
-          background: var(--bg);
+          background: transparent;
           color: var(--text);
         }
         * { box-sizing: border-box; }
@@ -136,10 +135,7 @@ class DigitalIntercomPanel extends HTMLElement {
         }
         main {
           width: min(28rem, calc(100vw - 2rem));
-          background: var(--card);
-          border-radius: 1.25rem;
           padding: 1.75rem;
-          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
         }
         h1 { margin: 0 0 0.35rem; font-size: 1.4rem; }
         p { margin: 0; color: var(--muted); line-height: 1.45; }
@@ -162,7 +158,10 @@ class DigitalIntercomPanel extends HTMLElement {
           color: white;
           background: var(--listen);
           cursor: pointer;
+          -webkit-user-select: none;
           user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
           touch-action: none;
         }
         button:disabled {
@@ -171,15 +170,12 @@ class DigitalIntercomPanel extends HTMLElement {
         }
         button.talking { background: var(--talk); }
         #audios { display: none; }
-        .hint { margin-top: 1rem; font-size: 0.9rem; }
       </style>
       <div class="wrap">
         <main>
           <h1>Digital Intercom</h1>
-          <p>Hold the button or spacebar to talk. Release to listen.</p>
           <div id="status">Connecting…</div>
           <button id="ptt" type="button" disabled>Push to talk</button>
-          <p class="hint">This page joins Prox at <code>${listen_path}</code> and <code>${talk_path}</code>.</p>
           <div id="audios"></div>
         </main>
       </div>
@@ -193,6 +189,8 @@ class DigitalIntercomPanel extends HTMLElement {
     this._ptt.addEventListener("pointerdown", this._onPointerDown);
     this._ptt.addEventListener("pointerup", this._onPointerUp);
     this._ptt.addEventListener("pointercancel", this._onPointerUp);
+    this._ptt.addEventListener("selectstart", this._preventSelect);
+    this._ptt.addEventListener("contextmenu", this._preventSelect);
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("keyup", this._onKeyUp);
     window.addEventListener("blur", this._onBlur);
@@ -228,11 +226,13 @@ class DigitalIntercomPanel extends HTMLElement {
   _setPath(nextPath) {
     this._path = nextPath;
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
-    this._ws.send(JSON.stringify({
-      command: "set_path",
-      path: nextPath,
-      prettyPath: nextPath,
-    }));
+    this._ws.send(
+      JSON.stringify({
+        command: "set_path",
+        path: nextPath,
+        prettyPath: nextPath,
+      }),
+    );
   }
 
   _setTalking(next) {
@@ -250,13 +250,22 @@ class DigitalIntercomPanel extends HTMLElement {
   }
 
   _waitIceConnected(pc) {
-    if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+    if (
+      pc.iceConnectionState === "connected" ||
+      pc.iceConnectionState === "completed"
+    ) {
       return Promise.resolve();
     }
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("ICE connect timeout")), 5000);
+      const timeout = setTimeout(
+        () => reject(new Error("ICE connect timeout")),
+        5000,
+      );
       const onChange = () => {
-        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        if (
+          pc.iceConnectionState === "connected" ||
+          pc.iceConnectionState === "completed"
+        ) {
           clearTimeout(timeout);
           pc.removeEventListener("iceconnectionstatechange", onChange);
           resolve();
@@ -315,11 +324,15 @@ class DigitalIntercomPanel extends HTMLElement {
 
     this._micTrack = stream.getAudioTracks()[0];
     this._micTrack.enabled = false;
-    const transceiver = pc.addTransceiver(this._micTrack, { direction: "sendonly" });
+    const transceiver = pc.addTransceiver(this._micTrack, {
+      direction: "sendonly",
+    });
 
     await pc.setLocalDescription(await pc.createOffer());
     if (this._stale(generation)) return;
-    const session = await this._postJson("/session", { sdp: pc.localDescription.sdp });
+    const session = await this._postJson("/session", {
+      sdp: pc.localDescription.sdp,
+    });
     if (this._stale(generation)) return;
     this._sessionId = session.sessionId;
     await pc.setRemoteDescription(session.sessionDescription);
@@ -364,7 +377,13 @@ class DigitalIntercomPanel extends HTMLElement {
     this._ws = ws;
     ws.onopen = () => {
       if (this._stale(generation) || this._ws !== ws) return;
-      ws.send(JSON.stringify({ command: "set_path", path: listen_path, prettyPath: listen_path }));
+      ws.send(
+        JSON.stringify({
+          command: "set_path",
+          path: listen_path,
+          prettyPath: listen_path,
+        }),
+      );
       ws.send(JSON.stringify({ command: "set_name", name: "intercom-web" }));
       this._ready = true;
       this._ptt.disabled = false;
@@ -389,7 +408,9 @@ class DigitalIntercomPanel extends HTMLElement {
         return;
       }
       if (message.command !== "active_sessions") return;
-      this._enqueueReceive(() => this._subscribeSessions(pc, message.sessions || [], generation));
+      this._enqueueReceive(() =>
+        this._subscribeSessions(pc, message.sessions || [], generation),
+      );
     };
   }
 
@@ -413,7 +434,10 @@ class DigitalIntercomPanel extends HTMLElement {
       tracks: tracksToConnect,
     });
     if (this._stale(generation)) return;
-    Object.assign(this._pendingStreamIdToTrackId, receive.streamIdToTrackId || {});
+    Object.assign(
+      this._pendingStreamIdToTrackId,
+      receive.streamIdToTrackId || {},
+    );
     await pc.setRemoteDescription(receive.sessionDescription);
     await pc.setLocalDescription(await pc.createAnswer());
     if (this._stale(generation)) return;
@@ -433,13 +457,18 @@ class DigitalIntercomPanel extends HTMLElement {
       this._ptt.removeEventListener("pointerdown", this._onPointerDown);
       this._ptt.removeEventListener("pointerup", this._onPointerUp);
       this._ptt.removeEventListener("pointercancel", this._onPointerUp);
+      this._ptt.removeEventListener("selectstart", this._preventSelect);
+      this._ptt.removeEventListener("contextmenu", this._preventSelect);
     }
     if (this._ws) {
       this._ws.onopen = null;
       this._ws.onerror = null;
       this._ws.onclose = null;
       this._ws.onmessage = null;
-      if (this._ws.readyState === WebSocket.OPEN || this._ws.readyState === WebSocket.CONNECTING) {
+      if (
+        this._ws.readyState === WebSocket.OPEN ||
+        this._ws.readyState === WebSocket.CONNECTING
+      ) {
         this._ws.close();
       }
       this._ws = null;

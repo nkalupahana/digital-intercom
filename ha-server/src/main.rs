@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     let ha = HomeAssistant::from_env()?;
     let http_config = http::Config::from_env()?;
     if let Err(err) = ha.set_doorbell(false).await {
-        eprintln!("failed to create doorbell sensor: {err}");
+        eprintln!("failed to create doorbell sensor: {err:#}");
     }
 
     let intercom = intercom::Intercom::start(ha).await?;

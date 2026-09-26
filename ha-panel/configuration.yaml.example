@@ -7,3 +7,10 @@ panel_custom:
     config:
       base_url: https://prox.nisa.la
       remote: github.com/nkalupahana/digital-intercom.git
+
+rest_command:
+  intercom_unlock:
+    url: http://localhost:8080/unlock
+    method: POST
+    headers:
+      Authorization: !secret intercom_unlock_header

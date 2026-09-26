@@ -8,9 +8,8 @@ use tokio::net::TcpListener;
 
 use crate::intercom::IntercomControl;
 
-const DEFAULT_HTTP_PORT: u16 = 8080;
-
 pub struct Config {
+    addr: String,
     port: u16,
     token: String,
 }
@@ -21,14 +20,19 @@ impl Config {
         if token.trim().is_empty() {
             bail!("UNLOCK_TOKEN is empty");
         }
-        let port = match std::env::var("HTTP_PORT") {
-            Ok(value) if !value.trim().is_empty() => value
-                .trim()
-                .parse()
-                .context("HTTP_PORT must be a port number")?,
-            _ => DEFAULT_HTTP_PORT,
-        };
-        Ok(Self { port, token })
+        let addr = std::env::var("HTTP_ADDR").context("HTTP_ADDR is required")?;
+        if addr.trim().is_empty() {
+            bail!("HTTP_ADDR is empty");
+        }
+        let port = std::env::var("HTTP_PORT").context("HTTP_PORT is required")?;
+        if port.trim().is_empty() {
+            bail!("HTTP_PORT is empty");
+        }
+        let port = port
+            .trim()
+            .parse()
+            .context("HTTP_PORT must be a port number")?;
+        Ok(Self { addr, port, token })
     }
 }
 
@@ -39,6 +43,7 @@ struct AppState {
 }
 
 pub async fn serve(config: Config, intercom: IntercomControl) -> Result<()> {
+    let addr = config.addr;
     let port = config.port;
     let app = Router::new()
         .route("/unlock", post(unlock))
@@ -46,10 +51,10 @@ pub async fn serve(config: Config, intercom: IntercomControl) -> Result<()> {
             intercom,
             token: config.token,
         });
-    let listener = TcpListener::bind(("0.0.0.0", port))
+    let listener = TcpListener::bind((addr.as_str(), port))
         .await
-        .with_context(|| format!("bind HTTP {port}"))?;
-    println!("HTTP listening on 0.0.0.0:{port}");
+        .with_context(|| format!("bind HTTP {addr}:{port}"))?;
+    println!("HTTP listening on {addr}:{port}");
     axum::serve(listener, app).await.context("HTTP server")?;
     Ok(())
 }

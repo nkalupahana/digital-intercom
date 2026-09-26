@@ -393,16 +393,12 @@ async fn connect_prox_websocket(
                         eprintln!("websocket handler error: {err:#}");
                     }
                 }
-                Ok(Message::Close(_)) => break,
-                Err(err) => {
-                    eprintln!("websocket error: {err}");
-                    break;
-                }
+                Ok(Message::Close(frame)) => fatal(format!("websocket closed: {frame:?}")),
+                Err(err) => fatal(format!("websocket error: {err}")),
                 _ => {}
             }
         }
-        drop(sink);
-        intercom.set_mode(Mode::Idle);
+        fatal("websocket disconnected".into());
     });
 
     Ok(())
@@ -453,6 +449,11 @@ async fn handle_ws_text(
         subscribed.extend(new_ids);
     }
     Ok(())
+}
+
+fn fatal(message: String) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1);
 }
 
 fn is_intercom_client_path(path: &str) -> bool {
