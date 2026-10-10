@@ -10,9 +10,15 @@
 #include <AudioTools/CoreAudio/AudioOutput.h>
 #include <AudioTools/CoreAudio/AudioStreams.h>
 #include <AudioTools/CoreAudio/AudioTypes.h>
+#include <cstdint>
+
+#ifndef RADIO_ENABLED
+#define RADIO_ENABLED 1
+#endif
+
+#if RADIO_ENABLED
 #include <RHReliableDatagram.h>
 #include <RH_RF69.h>
-#include <cstdint>
 
 // Idle - Radio
 constexpr int RADIO_IRQ_PIN = 26;
@@ -20,6 +26,7 @@ RH_RF69 driver(SS, 26);
 RHReliableDatagram manager(driver, RADIO_INTERCOM_ADDRESS);
 uint8_t msgBuf[RH_RF69_MAX_MESSAGE_LEN];
 constexpr int RADIO_RESET_PIN = 16;
+#endif
 
 // Idle - Doorbell
 constexpr float DOORBELL_TRIGGER_VOLUME = 1500;
@@ -52,6 +59,7 @@ void setup() {
   Serial.begin(115200);
   ESP_LOGI(TAG, "Initializing digital intercom...");
 
+#if RADIO_ENABLED
   // Idle - Radio
   pinMode(RADIO_RESET_PIN, OUTPUT);
   digitalWrite(RADIO_RESET_PIN, LOW);
@@ -65,8 +73,10 @@ void setup() {
     ESP_LOGI(TAG, "Waiting for radio to initialize...");
     delay(1000);
   }
+#endif
   ESP_LOGI(TAG, "Bridge IP: %s\n", STRING(BRIDGE_IP));
 
+#if RADIO_ENABLED
   driver.setTxPower(RADIO_POWER, true);
   bool radioFrequencySet = driver.setFrequency(RADIO_FREQUENCY);
   if (!radioFrequencySet) {
@@ -79,6 +89,7 @@ void setup() {
     ESP_LOGE(TAG, "Failed to set radio modem config");
     errorHang();
   }
+#endif
 
   // Open door
   pinMode(DOOR_RELAY_PIN, OUTPUT);
@@ -166,6 +177,7 @@ void loop() {
   switch (state) {
   case State::IDLE: {
     /// Reset everything to base state
+#if RADIO_ENABLED
     // Radio
     if (manager.available()) {
       ESP_LOGI(TAG, "Radio message received.");
@@ -191,6 +203,7 @@ void loop() {
         }
       }
     }
+#endif
 
     // Doorbell
     audioMonitorCopier.copy();
